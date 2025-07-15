@@ -41,7 +41,7 @@ class Server {
                 const allowedOrigins = [
                     // Production URLs
                     'https://brave-bay-061146803.1.azurestaticapps.net',
-                    'https://your-backend-production-url.azurewebsites.net', 
+                    'https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/', 
 
                     // Dev URLs
                     'http://localhost:3000',
