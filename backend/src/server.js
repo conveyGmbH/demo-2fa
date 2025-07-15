@@ -37,45 +37,28 @@ class Server {
             origin: function (origin, callback) {
                 if (!origin) return callback(null, true);
                 
-                // Liste des origines autorisées
+                // List of allowed origins
                 const allowedOrigins = [
+                    // Production URLs
+                    'https://brave-bay-061146803.1.azurestaticapps.net',
+                    'https://your-backend-production-url.azurewebsites.net', 
+
+                    // Dev URLs
                     'http://localhost:3000',
-                    'http://localhost:5005',
-                    'http://localhost:5006',
-                    'http://localhost:5500',
-                    'http://localhost:5501',
-                    'http://localhost:5502',
-                    'http://localhost:5503',
-                    'http://localhost:5504',
-                    'http://localhost:5505',
-                    'http://localhost:5506',
-                    'http://localhost:5507',
-                    'http://localhost:5508',
-                    'http://localhost:5509',
                     'http://localhost:8080',
-                    'http://localhost:8000',
-                    'http://127.0.0.1:5500',
-                    'http://127.0.0.1:5501',
-                    'http://127.0.0.1:5502',
-                    'http://127.0.0.1:5503',
-                    'http://127.0.0.1:5504',
-                    'http://127.0.0.1:5505',
-                    'http://127.0.0.1:5506',
-                    'http://127.0.0.1:5507',
-                    'http://127.0.0.1:5508',
-                    'http://127.0.0.1:5509',
+                    'http://localhost:8000',                  
                     'http://localhost:51170',
                     'http://localhost:4000',
                 ];
 
-                // En développement, autoriser toutes les origines localhost
+                // In development, allow all localhost origins
                 if (process.env.NODE_ENV !== 'production') {
                     if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
                         return callback(null, true);
                     }
                 }
 
-                // Vérifier si l'origine est dans la liste autorisée
+                // Check if the origin is in the allowed list
                 if (allowedOrigins.indexOf(origin) !== -1) {
                     callback(null, true);
                 } else {
@@ -104,18 +87,6 @@ class Server {
             }
         });
         this.app.use(limiter);
-
-        // this.app.use((req, res, next) => {
-        //     logger.info(`${req.method} ${req.path}`, {
-        //         ip: req.ip,
-        //         origin: req.get('Origin'),
-        //         userAgent: req.get('User-Agent'),
-        //         body: req.method === 'POST' ? '***REDACTED***' : undefined
-        //     });
-        //     next();
-        // });
-        
-        console.log('✅ Middleware setup complete');
     }
 
     setupRoutes() {
@@ -183,28 +154,26 @@ class Server {
                 logger.info(`Server listening on port ${port}`);
                 
                 console.log('');
-                console.log('🎉 SERVER READY!');
-                console.log(`🔗 Server: http://localhost:${port}`);
-                console.log(`🏠 Root: http://localhost:${port}/`);
-                console.log(`💚 Health: http://localhost:${port}/api/v1/health`);
-                console.log(`🗃️ DB Test: http://localhost:${port}/api/v1/test-db`);
-                console.log(`🌐 CORS Test: http://localhost:${port}/cors-test`);
+                console.log(' SERVER READY!');
+                console.log(` Server: http://localhost:${port}`);
+                console.log(` Root: http://localhost:${port}/`);
+                console.log(` Health: http://localhost:${port}/api/v1/health`);
+                console.log(` DB Test: http://localhost:${port}/api/v1/test-db`);
+                console.log(` CORS Test: http://localhost:${port}/cors-test`);
                 console.log('');
                 console.log('📋 Available endpoints:');
                 if (routes) {
                     console.log('   GET  /api/v1/health - Health check');
                     console.log('   GET  /api/v1/test-db - Database test');
                     console.log('   GET  /api/v1/tables - Show all tables overview');
-                    console.log('   GET  /api/v1/tables/TwoFactorUser - User table');
-                    console.log('   GET  /api/v1/tables/TwoFactorDevice - Device table');
-                    console.log('   GET  /api/v1/tables/TwoFactorSession - Session table');
+                    
                     console.log('   POST /api/v1/auth/login - User login');
                     console.log('   POST /api/v1/auth/setup-2fa - Setup 2FA');
                     console.log('   POST /api/v1/auth/verify-2fa - Verify 2FA');
                     console.log('   POST /api/v1/auth/disable-2fa - Disable 2FA');
                     console.log('   POST /api/v1/auth/status - User status');
                 } else {
-                    console.log('   ⚠️ No routes loaded - check routes/index.js');
+                    console.log('⚠️ No routes loaded - check routes/index.js');
                 }
                 console.log('');
                 console.log('🔒 CORS Configuration:');

@@ -16,10 +16,15 @@ let connection;
 
 function getDateString() {
     const currentDate = new Date();
-    const [dYear, dMonth, dDay, dHour, dMinute, dSeconds, dMsec] = 
-          [currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(),
-           currentDate.getHours(), currentDate.getMinutes(), currentDate.getSeconds(),
-           currentDate.getMilliseconds()];
+    const [dYear, dMonth, dDay, dHour, dMinute, dSeconds, dMsec] = [
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+      currentDate.getHours(),
+      currentDate.getMinutes(),
+      currentDate.getSeconds(),
+      currentDate.getMilliseconds(),
+    ];
           
     return dDay.toString().padStart(2, '0')+'.'+(dMonth+1).toString().padStart(2, '0')+'. '+
            dHour.toString().padStart(2, '0')+':'+dMinute.toString().padStart(2, '0')+':'+dSeconds.toString().padStart(2, '0')+
@@ -93,7 +98,7 @@ async function displayTwoFactorDevices() {
     }
 }
 
-// Function to display TwoFactorSession table (bonus)
+// Function to display TwoFactorSession 
 async function displayTwoFactorSessions() {
     try {
         console.log('\n🔑 === TwoFactorSession Table ===');
@@ -122,35 +127,34 @@ async function displayDatabaseSummary() {
         
         // Count users
         const userCount = await connection.query('SELECT COUNT(*) as count FROM appblddbo.TwoFactorUser');
-        console.log(`   👥 Total Users: ${userCount[0].count}`);
+        console.log(` Total Users: ${userCount[0].count}`);
         
         // Count devices
         const deviceCount = await connection.query('SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice');
-        console.log(`   🔐 Total Devices: ${deviceCount[0].count}`);
+        console.log(`Total Devices: ${deviceCount[0].count}`);
         
         // Count active devices
         const activeDeviceCount = await connection.query('SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE Inactive = 0');
-        console.log(`   ✅ Active Devices: ${activeDeviceCount[0].count}`);
+        console.log(` Active Devices: ${activeDeviceCount[0].count}`);
         
         // Count sessions
         const sessionCount = await connection.query('SELECT COUNT(*) as count FROM appblddbo.TwoFactorSession');
-        console.log(`   🔑 Active Sessions: ${sessionCount[0].count}`);
+        console.log(` Active Sessions: ${sessionCount[0].count}`);
         
-        console.log('   =====================================\n');
+        console.log('=====================================\n');
         
     } catch (error) {
-        console.error('   ❌ Error getting database summary:', error.message);
+        console.error('Error getting database summary:', error.message);
     }
 }
 
 // Main function to display all tables at startup
 async function displayTablesAtStartup() {
     if (!connection) {
-        console.log('❌ Cannot display tables: database not connected');
+        console.log('Cannot display tables: database not connected');
         return;
     }
     
-    console.log('\n🚀 === DATABASE STARTUP OVERVIEW ===');
     console.log(getDateString(), ' Loading database tables...\n');
     
     try {
@@ -183,8 +187,7 @@ async function displayTable(tableName) {
 }
 
 
-
-// Simple database manager object (to keep compatibility with your server.js)
+// Simple database manager object 
 const databaseManager = {
     // Connect method
     async connect() {
@@ -248,7 +251,6 @@ const databaseManager = {
     displaySummary: displayDatabaseSummary,
     displayTable: displayTable,
     displayAll: displayTablesAtStartup,
-
 
     // Get status
     isConnected() {
