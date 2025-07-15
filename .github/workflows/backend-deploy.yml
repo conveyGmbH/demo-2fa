@@ -1,0 +1,87 @@
+# .github/workflows/backend-deploy.yml
+name: Build and deploy Node.js app to Azure Web App - LS2FABackend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js version
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
+      
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm ci --production
+          
+      - name: Create deployment package from backend folder
+        run: |
+          cd backend
+          zip -r ../backend-release.zip . \
+            -x "node_modules/.cache/*" \
+            -x "*.log" \
+            -x ".env*" \
+            -x ".git*"
+          echo "✅ Backend package created from backend/ folder"
+          
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-app
+          path: backend-release.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-app
+          
+      - name: Unzip artifact for deployment
+        run: |
+          unzip backend-release.zip
+          echo "Files after unzip:"
+          ls -la
+        
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2BF766D5A20142FD98FE5C9A0AC83352 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3319CE4BA45F421B8738BADAE4CEA94A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7F935D1C76E748C79F07EC76D990ECAF }}
+          
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'LS2FABackend'
+          slot-name: 'Production'
+          package: .
+          
+      - name: Test deployment
+        run: |
+          echo "⏳ Attente du déploiement (30s)..."
+          sleep 30
+          echo "🧪 Test des endpoints backend..."
+          curl -f https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1/health || echo "❌ Health check failed"
