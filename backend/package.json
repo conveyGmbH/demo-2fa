@@ -1,0 +1,50 @@
+{
+  "name": "twofactorservice",
+  "version": "1.0.0",
+  "description": "Backend API for LeadSuccess 2FA authentication system",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon --inspect src/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitsrv.convey.de/git/twoFactorService"
+  },
+  "keywords": [
+    "2FA",
+    "TwoFactor",
+    "Security"
+  ],
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "compression": "^1.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^6.11.2",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.1",
+    "helmet": "^7.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "odbc": "^2.4.9",
+    "otpauth": "^9.4.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "passport-local": "^1.0.0",
+    "qr-image": "^3.2.0",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.42.0",
+    "jest": "^29.5.0",
+    "nodemon": "^2.0.22",
+    "prettier": "^2.8.8"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

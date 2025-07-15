@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadSuccess Portal - Secure Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#D86141',
+                        'primary-light': '#f8b4a6',
+                        'primary-dark': '#b53e20',
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .spinner {
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #D86141;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .modal-overlay {
+            backdrop-filter: blur(4px);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .device-name {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .utf8-support {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .error-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <div id="loginContainer" class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <div class="text-center">
+                <div class="mx-auto h-16 w-16 bg-primary rounded-full flex items-center justify-center">
+                    <span class="text-2xl font-bold text-white">LS</span>
+                </div>
+                <h1 class="mt-4 text-2xl font-bold text-gray-900">LeadSuccess Portal</h1>
+                <p class="mt-2 text-sm text-gray-600">Secure access to your account</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 space-y-6 fade-in">
+                <form id="loginForm" class="space-y-4">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+                        <input type="text" id="username" name="username" required
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                        <input type="password" id="password" name="password" required
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+
+                    <div class="flex items-start">
+                        <input type="checkbox" id="privacyConsent" required
+                            class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded mt-1">
+                        <label for="privacyConsent" class="ml-2 block text-sm text-gray-700">
+                            I agree to the <a href="#" class="text-primary hover:underline">Privacy Policy</a>
+                            and consent to data processing.
+                        </label>
+                    </div>
+
+                    <button type="submit" id="loginBtn" disabled
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-400 cursor-not-allowed disabled:opacity-50 transition-all duration-200">
+                        <span id="loginBtnText">Sign In</span>
+                        <div id="loginSpinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                </form>
+
+                <div class="text-center">
+                    <a href="#" class="text-sm text-primary hover:underline">Forgot your password?</a>
+                </div>
+
+                <div id="loginError"
+                    class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboardLayout" class="hidden min-h-screen bg-gray-50">
+        <header class="bg-white shadow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center">
+                        <div class="h-8 w-8 bg-primary rounded-full flex items-center justify-center mr-3">
+                            <span class="text-sm font-bold text-white">LS</span>
+                        </div>
+                        <h1 class="text-xl font-semibold text-gray-900">LeadSuccess Portal</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="userDisplay" class="text-gray-700 font-medium"></span>
+                        <button onclick="logout()"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-8">
+                <nav class="flex space-x-8">
+                    <button onclick="showTab('overview')" data-tab="overview"
+                        class="tab-btn border-b-2 border-primary text-primary pb-2 px-1 text-sm font-medium">
+                        Overview
+                    </button>
+                    <button onclick="showTab('devices')" data-tab="devices"
+                        class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 pb-2 px-1 text-sm font-medium">
+                        Devices
+                    </button>
+                    <button onclick="showTab('sessions')" data-tab="sessions"
+                        class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 pb-2 px-1 text-sm font-medium">
+                        Sessions
+                    </button>
+                </nav>
+            </div>
+
+            <div id="overviewTab" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Account Information</h3>
+                        <div id="userInfo" class="space-y-3"></div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Security Status</h3>
+                        <div class="text-center py-8">
+                            <div id="securityIcon" class="text-4xl mb-4">🔒</div>
+                            <div id="securityStatus"
+                                class="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block">
+                                Account Secured
+                            </div>
+                            <div class="mt-4">
+                                <button onclick="show2FASetup()" id="setup2FABtn"
+                                    class="hidden bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                    <i class="fas fa-shield-alt mr-2"></i>Enable 2FA
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="dbPasswordDisplay"
+                            class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <h4 class="text-sm font-semibold text-green-800 mb-2">
+                                <i class="fas fa-key mr-2"></i>Database Password Generated
+                            </h4>
+                            <p class="text-xs text-green-700 mb-2">Valid for 24 hours:</p>
+                            <div class="font-mono text-sm bg-white p-2 rounded border" id="dbPasswordValue"></div>
+                            <button onclick="copyDBPassword()"
+                                class="mt-2 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition-colors">
+                                Copy Password
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="devicesTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">Authentication Devices</h3>
+                        <button onclick="addNewDevice()"
+                            class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Add Device
+                        </button>
+                    </div>
+                    <div id="devicesList"></div>
+                </div>
+            </div>
+
+            <div id="sessionsTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">Active Sessions</h3>
+                        <button onclick="logoutAllSessions()"
+                            class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors group">
+                            <i class="fas fa-sign-out-alt mr-2 group-hover:animate-pulse"></i>
+                            <span>Logout Other Sessions</span>
+                        </button>
+                    </div>
+                    <div id="sessionsList"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="setup2FAModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto fade-in">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Setup Two-Factor Authentication</h3>
+                    <button onclick="closeModal('setup2FAModal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div id="qrCodeContainer" class="mb-4 qr-code-container">
+                            <img id="qrCodeImage" src="" alt="QR Code" class="mx-auto max-w-full h-auto"
+                                style="display: none;">
+                            <div id="qrCodeLoading"
+                                class="w-48 h-48 mx-auto border rounded bg-gray-100 flex items-center justify-center">
+                                <span class="text-gray-500">Loading QR Code...</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 p-3 rounded text-sm">
+                            <p class="text-gray-600 mb-2">Manual entry key:</p>
+                            <code id="manualKey"
+                                class="block bg-white p-2 rounded border font-mono text-xs break-all">Loading...</code>
+                            <button onclick="copyManualKey()" id="copyKeyBtn"
+                                class="mt-2 text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition-colors">
+                                Copy Key
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="text-sm text-gray-600">
+                        <p class="font-medium mb-2">Instructions:</p>
+                        <ol class="list-decimal pl-4 space-y-1">
+                            <li>Open your authenticator app (Google Authenticator, Authy, etc.)</li>
+                            <li>Scan the QR code above or enter the key manually</li>
+                            <li>Enter the 6-digit code from your app below</li>
+                        </ol>
+                    </div>
+
+                    <form id="setup2FAForm" class="space-y-4">
+                        <div>
+                            <label for="setupCode" class="block text-sm font-medium text-gray-700">Verification
+                                Code</label>
+                            <input type="text" id="setupCode" maxlength="6" pattern="[0-9]{6}" required
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-center text-lg tracking-widest focus:outline-none focus:ring-primary focus:border-primary"
+                                placeholder="123456">
+                        </div>
+
+                        <button type="submit" id="setupBtn"
+                            class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md text-sm font-medium transition-colors">
+                            <span id="setupBtnText">Enable 2FA</span>
+                            <div id="setupSpinner" class="spinner ml-2 hidden"></div>
+                        </button>
+                    </form>
+
+                    <div id="setupError" class="hidden bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="verify2FAModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full fade-in">
+            <div class="p-6">
+                <div class="text-center mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Two-Factor Authentication</h3>
+                    <p class="text-gray-600">Enter the 6-digit code from your authenticator app</p>
+                </div>
+
+                <form id="verify2FAForm" class="space-y-4">
+                    <div>
+                        <input type="text" id="verifyCode" maxlength="6" pattern="[0-9]{6}" required
+                            placeholder="000000"
+                            class="block w-full px-3 py-3 border border-gray-300 rounded-md text-center text-xl tracking-widest focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+
+                    <button type="submit" id="verifyBtn"
+                        class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md font-medium transition-colors">
+                        <span id="verifyBtnText">Verify</span>
+                        <div id="verifySpinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                </form>
+
+                <div id="verifyError"
+                    class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lastDeviceModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full fade-in">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Remove Last Device</h3>
+                        <p class="text-sm text-gray-600 mt-1">This action will disable 2FA</p>
+                    </div>
+                </div>
+
+                <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-triangle text-red-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h4 class="text-sm font-medium text-red-800">Warning</h4>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p>You are about to remove your last authentication device:</p>
+                                <p class="font-medium mt-1 utf8-support" id="lastDeviceName"></p>
+                                <p class="mt-2">This will:</p>
+                                <ul class="list-disc pl-5 mt-1 space-y-1">
+                                    <li>Completely disable two-factor authentication</li>
+                                    <li>Remove all authentication devices</li>
+                                    <li>Reset your login to use only your original password</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-sm text-gray-600 mb-6">
+                    <p class="font-medium">Are you absolutely sure you want to continue?</p>
+                    <p class="mt-1">This action cannot be undone.</p>
+                </div>
+
+                <div class="flex space-x-3">
+                    <button onclick="closeModal('lastDeviceModal')"
+                        class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="confirmRemoveLastDevice()"
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md font-medium transition-colors">
+                        Yes, Remove Device
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="errorModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full fade-in">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-exclamation-circle text-red-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Error</h3>
+                        <p class="text-sm text-gray-600 mt-1">An error occurred</p>
+                    </div>
+                </div>
+
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                    <p class="text-red-700 text-sm" id="errorModalMessage"></p>
+                </div>
+
+                <div class="flex justify-end">
+                    <button onclick="closeModal('errorModal')"
+                        class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md font-medium transition-colors">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="passwordModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full fade-in">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-key text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Authentication Required</h3>
+                        <p class="text-sm text-gray-600 mt-1" id="passwordModalMessage">Enter your password to continue
+                        </p>
+                    </div>
+                </div>
+
+                <form id="passwordModalForm" class="space-y-4">
+                    <div>
+                        <label for="modalPassword" class="block text-sm font-medium text-gray-700">Password</label>
+                        <input type="password" id="modalPassword" required
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button type="button" onclick="closeModal('passwordModal')"
+                            class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md font-medium transition-colors">
+                            Continue
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="successModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full fade-in">
+            <div class="p-6 text-center">
+                <div class="text-green-500 text-4xl mb-4">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2" id="successTitle">Success!</h3>
+                <p class="text-gray-600 mb-6" id="successMessage"></p>
+                <button onclick="closeModal('successModal')"
+                    class="bg-primary hover:bg-primary-dark text-white py-2 px-6 rounded-md font-medium transition-colors">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg p-6 fade-in">
+            <div class="flex items-center space-x-3">
+                <div class="spinner"></div>
+                <span id="loadingText" class="text-gray-700 font-medium">Processing...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration API
+        const API_BASE_URL = 'http://localhost:4000/api/v1';
+
+        // Application state
+        let currentUser = null;
+        let sessionToken = null;
+        let currentSetupData = null;
+        let pendingDeviceRemoval = null;
+        let currentUserPassword = null;
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', function () {
+            initializeApp();
+        });
+
+        function initializeApp() {
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Privacy consent checkbox
+            document.getElementById('privacyConsent').addEventListener('change', function () {
+                const loginBtn = document.getElementById('loginBtn');
+                if (this.checked) {
+                    loginBtn.disabled = false;
+                    loginBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                    loginBtn.classList.add('bg-primary', 'hover:bg-primary-dark');
+                } else {
+                    loginBtn.disabled = true;
+                    loginBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                    loginBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
+                }
+            });
+
+            // Form listeners
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('setup2FAForm').addEventListener('submit', handleSetup2FA);
+            document.getElementById('verify2FAForm').addEventListener('submit', handleVerify2FA);
+            document.getElementById('passwordModalForm').addEventListener('submit', handlePasswordModal);
+
+            // Auto-submit verification codes
+            document.getElementById('verifyCode').addEventListener('input', function (e) {
+                if (e.target.value.length === 6) {
+                    setTimeout(() => {
+                        document.getElementById('verify2FAForm').dispatchEvent(new Event('submit'));
+                    }, 100);
+                }
+            });
+
+            document.getElementById('setupCode').addEventListener('input', function (e) {
+                if (e.target.value.length === 6) {
+                    setTimeout(() => {
+                        document.getElementById('setup2FAForm').dispatchEvent(new Event('submit'));
+                    }, 100);
+                }
+            });
+        }
+
+        // API Helper Functions
+        async function apiRequest(method, endpoint, data = null) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (sessionToken) {
+                options.headers['X-Session-Token'] = sessionToken;
+            }
+
+            if (data && method !== 'GET') {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(url, options);
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || `Request failed with status ${response.status}`);
+            }
+
+            return result;
+        }
+
+        //  error handling 
+        function showErrorModal(message) {
+            document.getElementById('errorModalMessage').textContent = message;
+            showModal('errorModal');
+        }
+
+        // Password input modal
+        function requestPassword(message = 'Enter your password to continue') {
+            return new Promise((resolve, reject) => {
+                // Use stored password if available
+                if (currentUserPassword) {
+                    resolve(currentUserPassword);
+                    return;
+                }
+
+                document.getElementById('passwordModalMessage').textContent = message;
+                document.getElementById('modalPassword').value = '';
+                showModal('passwordModal');
+
+                // Set up one-time event listener
+                function handlePasswordSubmit(e) {
+                    e.preventDefault();
+                    const password = document.getElementById('modalPassword').value;
+                    if (password) {
+                        currentUserPassword = password; // Store for future use
+                        closeModal('passwordModal');
+                        resolve(password);
+                    } else {
+                        showErrorModal("Password cannot be empty.");
+                        reject(new Error("Password cannot be empty."));
+                    }
+                    document.getElementById('passwordModalForm').removeEventListener('submit', handlePasswordSubmit);
+                }
+
+                document.getElementById('passwordModalForm').addEventListener('submit', handlePasswordSubmit);
+            });
+        }
+
+        function handlePasswordModal(e) {
+            e.preventDefault();
+            // Handled by requestPassword function
+        }
+
+        // Authentication handlers
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Store password for session
+            currentUserPassword = password;
+
+            setLoadingState('loginBtn', true);
+            hideError('loginError');
+
+            try {
+                const result = await apiRequest('POST', '/auth/login', { username, password });
+
+                if (result.success) {
+                    sessionToken = result.sessionToken;
+                    currentUser = result.user;
+
+                    if (result.nextStep === 'verify_2fa') {
+                        showVerify2FA();
+                    } else {
+                        showDashboard(result);
+                    }
+                }
+            } catch (error) {
+                showError('loginError', error.message);
+            } finally {
+                setLoadingState('loginBtn', false);
+            }
+        }
+
+        async function handleVerify2FA(e) {
+            e.preventDefault();
+
+            const code = document.getElementById('verifyCode').value;
+
+            setLoadingState('verifyBtn', true);
+            hideError('verifyError');
+
+            try {
+                const result = await apiRequest('POST', '/auth/verify-2fa', {
+                    sessionToken,
+                    totpCode: code
+                });
+
+                if (result.success) {
+                    closeModal('verify2FAModal');
+
+                    if (result.dbPassword) {
+                        showDBPassword(result.dbPassword);
+                    }
+
+                    showDashboard(result);
+                }
+            } catch (error) {
+                showError('verifyError', error.message);
+                document.getElementById('verifyCode').value = '';
+                document.getElementById('verifyCode').focus();
+            } finally {
+                setLoadingState('verifyBtn', false);
+            }
+        }
+
+        async function show2FASetup() {
+            if (!currentUser) return;
+
+            try {
+                showLoadingModal('Setting up 2FA...');
+
+                const result = await apiRequest('POST', '/auth/setup-2fa', {
+                    username: currentUser.username,
+                    password: currentUserPassword,
+                    deviceInfo: 'Web Browser'
+                });
+
+                if (result.success) {
+                    currentSetupData = result;
+
+                    const qrImg = document.getElementById('qrCodeImage');
+                    const qrLoading = document.getElementById('qrCodeLoading');
+                    const manualKey = document.getElementById('manualKey');
+
+                    qrImg.src = result.totpSetup.qrCodeDataURL;
+                    qrImg.style.display = 'block';
+                    qrLoading.style.display = 'none';
+                    manualKey.textContent = result.totpSetup.secret;
+
+                    hideLoadingModal();
+                    showModal('setup2FAModal');
+                }
+            } catch (error) {
+                hideLoadingModal();
+                showErrorModal(error.message);
+            }
+        }
+
+        async function handleSetup2FA(e) {
+            e.preventDefault();
+
+            const code = document.getElementById('setupCode').value;
+
+            setLoadingState('setupBtn', true);
+            hideError('setupError');
+
+            try {
+                const result = await apiRequest('POST', '/auth/verify-2fa', {
+                    sessionToken,
+                    totpCode: code
+                });
+
+                if (result.success) {
+                    closeModal('setup2FAModal');
+                    document.getElementById('setupCode').value = '';
+
+                    if (result.dbPassword) {
+                        showDBPassword(result.dbPassword);
+                    }
+
+                    showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
+                    await loadCurrentUser();
+                    loadDevices();
+                }
+            } catch (error) {
+                showError('setupError', error.message);
+                document.getElementById('setupCode').value = '';
+                document.getElementById('setupCode').focus();
+            } finally {
+                setLoadingState('setupBtn', false);
+            }
+        }
+
+        // Navigation
+        function showDashboard(data) {
+            document.getElementById('loginContainer').classList.add('hidden');
+            document.getElementById('dashboardLayout').classList.remove('hidden');
+
+            currentUser = data.user || currentUser;
+            document.getElementById('userDisplay').textContent = currentUser.username;
+
+            loadCurrentUser();
+            showTab('overview');
+        }
+
+        function showVerify2FA() {
+            document.getElementById('verifyCode').value = '';
+            hideError('verifyError');
+            showModal('verify2FAModal');
+            document.getElementById('verifyCode').focus();
+        }
+
+        function showTab(tabName) {
+            // Update tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tabName;
+                btn.classList.toggle('border-primary', isActive);
+                btn.classList.toggle('text-primary', isActive);
+                btn.classList.toggle('border-transparent', !isActive);
+                btn.classList.toggle('text-gray-500', !isActive);
+            });
+
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            // Show active tab
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+
+            // Load dynamic content
+            if (tabName === 'devices') loadDevices();
+            else if (tabName === 'sessions') loadSessions();
+        }
+
+        // Data loading
+        async function loadCurrentUser() {
+            try {
+                const result = await apiRequest('POST', '/auth/status', {
+                    username: currentUser.username
+                });
+
+                if (result.success) {
+                    currentUser = { ...currentUser, ...result };
+                    updateUserInfo();
+                    updateSecurityStatus();
+                }
+            } catch (error) {
+                console.error('Error loading user:', error); // Keep console error for debugging
+                showErrorModal('Failed to load user information: ' + error.message);
+            }
+        }
+
+        function updateUserInfo() {
+            const userInfo = document.getElementById('userInfo');
+            userInfo.innerHTML = `
+                <div class="flex justify-between py-2 border-b">
+                    <span class="font-medium">Username:</span>
+                    <span class="utf8-support">${currentUser.username}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b">
+                    <span class="font-medium">2FA Status:</span>
+                    <span class="${currentUser.is2FAEnabled ? 'text-green-600' : 'text-red-600'}">${currentUser.is2FAEnabled ? 'Enabled' : 'Disabled'}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b">
+                    <span class="font-medium">Active Devices:</span>
+                    <span>${currentUser.activeDevices || 0}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b">
+                    <span class="font-medium">Active Sessions:</span>
+                    <span>${currentUser.activeSessions || 0}</span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span class="font-medium">DB Password:</span>
+                    <span class="${currentUser.hasDBPassword ? 'text-green-600' : 'text-gray-500'}">${currentUser.hasDBPassword ? 'Generated' : 'Not Set'}</span>
+                </div>
+            `;
+        }
+
+        function updateSecurityStatus() {
+            const setupBtn = document.getElementById('setup2FABtn');
+            const securityIcon = document.getElementById('securityIcon');
+            const securityStatus = document.getElementById('securityStatus');
+
+            if (currentUser.is2FAEnabled) {
+                setupBtn.classList.add('hidden');
+                securityIcon.textContent = '🔒';
+                securityStatus.textContent = 'Account Secured';
+                securityStatus.className = 'text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block';
+            } else {
+                setupBtn.classList.remove('hidden');
+                securityIcon.textContent = '⚠️';
+                securityStatus.textContent = 'Enable 2FA for Security';
+                securityStatus.className = 'text-sm font-medium text-yellow-600 bg-yellow-100 px-3 py-1 rounded-full inline-block';
+            }
+        }
+
+        // Device management with UTF-8 support
+        function getDeviceIcon(deviceInfo) {
+            const info = deviceInfo.toLowerCase();
+
+            if (info.includes('iphone') || info.includes('ios')) return '📱';
+            if (info.includes('android')) return '🤖';
+            if (info.includes('windows')) return '💻';
+            if (info.includes('mac') || info.includes('macos')) return '🖥️';
+            if (info.includes('linux')) return '🐧';
+            if (info.includes('tablet') || info.includes('ipad')) return '📱';
+            if (info.includes('chrome')) return '🌐';
+            if (info.includes('firefox')) return '🦊';
+            if (info.includes('safari')) return '🧭';
+            if (info.includes('edge')) return '🔷';
+
+            return '📟';
+        }
+
+        function detectIfCurrentDevice(deviceInfo) {
+            const currentUA = navigator.userAgent;
+            const deviceInfoLower = deviceInfo.toLowerCase();
+
+            if (deviceInfoLower.includes('chrome') && currentUA.includes('Chrome')) return true;
+            if (deviceInfoLower.includes('firefox') && currentUA.includes('Firefox')) return true;
+            if (deviceInfoLower.includes('safari') && currentUA.includes('Safari') && !currentUA.includes('Chrome')) return true;
+
+            return false;
+        }
+
+
+        // displayDevices 
+        function displayDevices(devices, twoFactorStatus = 'unknown') {
+            const devicesList = document.getElementById('devicesList');
+
+            if (!devices || devices.length === 0) {
+
+                let emptyMessage = '';
+                let emptyIcon = '';
+                let emptyClass = '';
+                let showAddButton = false;
+
+                switch (twoFactorStatus) {
+                    case 'disabled':
+                        emptyIcon = '🔓';
+                        emptyMessage = '2FA has been disabled. No authentication devices are active.';
+                        emptyClass = 'text-orange-600';
+                        break;
+
+                    case 'never_activated':
+                        emptyIcon = '🔐';
+                        emptyMessage = '2FA has never been activated for this account.';
+                        emptyClass = 'text-gray-500';
+                        showAddButton = false; 
+                        break;
+
+                    case 'enabled':
+                    case 'enabled_no_devices':
+                        emptyIcon = '📱';
+                        emptyMessage = 'No devices configured yet. Add your first authentication device to secure your account.';
+                        emptyClass = 'text-blue-600';
+                        showAddButton = true;
+                        break;
+
+                    case 'error':
+                        emptyIcon = '❌';
+                        emptyMessage = 'Unable to load devices. Please try again.';
+                        emptyClass = 'text-red-500';
+                        break;
+
+                    default:
+                        emptyIcon = '❓';
+                        emptyMessage = `No devices configured (Status: ${twoFactorStatus})`;
+                        emptyClass = 'text-gray-500';
+                }
+
+                const html = `
+            <div class="text-center py-12">
+                <div class="text-4xl mb-4">${emptyIcon}</div>
+                <p class="${emptyClass} font-medium mb-2">${emptyMessage}</p>
+                <p class="text-xs text-gray-400 mt-2">Debug: Status = ${twoFactorStatus}</p>
+                ${showAddButton ? `
+                    <button onclick="addNewDevice()" 
+                        class="mt-4 bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-md text-sm font-medium transition-colors">
+                        <i class="fas fa-plus mr-2"></i>Add Your First Device
+                    </button>
+                ` : ''}
+            </div>
+        `;
+
+                devicesList.innerHTML = html;
+
+                return;
+            }
+
+
+
+            devicesList.innerHTML = devices.map(device => {
+                const deviceIcon = getDeviceIcon(device.deviceInfo);
+                const isCurrentDevice = detectIfCurrentDevice(device.deviceInfo);
+
+                return `
+            <div class="flex items-center justify-between p-4 border rounded-lg mb-3 ${isCurrentDevice ? 'border-primary bg-primary/5' : ''} group transition-all hover:shadow-md">
+                <div class="flex items-center space-x-3 flex-1">
+                    <div class="text-2xl">${deviceIcon}</div>
+                    <div class="flex-1">
+                        <div class="font-medium flex items-center">
+                            <span id="deviceName-${device.deviceId}" class="device-name utf8-support">${device.deviceInfo}</span>
+                            ${isCurrentDevice ? '<span class="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Current</span>' : ''}
+                            <button onclick="editDeviceName(${device.deviceId}, '${device.deviceInfo.replace(/'/g, '\\\'')}')" 
+                                class="ml-2 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-edit text-sm"></i>
+                            </button>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            ${device.authMethod} • Active
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="removeDevice(${device.deviceId}, '${device.deviceInfo.replace(/'/g, '\\\'')}')" 
+                        class="text-red-600 hover:text-red-800 p-2"
+                        title="Remove device">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+            }).join('');
+        }
+
+
+        // Load Devices
+        async function loadDevices() {
+
+            try {
+                const url = `/devices/list/${currentUser.username}`;
+
+                const response = await apiRequest('GET', url);
+
+                const devices = response.devices || [];
+                const twoFactorStatus = response.twoFactorStatus || 'unknown';
+                const debugInfo = response.debugInfo || 'No debug info';
+
+                displayDevices(devices, twoFactorStatus);
+
+            } catch (error) {
+                console.error('Error loadDevices():', error);
+                console.log('error message:', error.message);
+
+           
+                if (error.message.includes('User not found')) {
+                    displayDevices([], 'never_activated');
+                } else if (error.message.includes('Invalid credentials')) {
+                    displayDevices([], 'error');
+                } else {
+                    showErrorModal('Failed to load devices: ' + error.message);
+                    displayDevices([], 'error');
+                }
+            }
+
+        }
+
+
+
+        // confirm Remove Last Device 
+        async function confirmRemoveLastDevice() {
+            if (!pendingDeviceRemoval) return;
+
+            try {
+                showLoadingModal('Removing last device and disabling 2FA...');
+
+                const result = await apiRequest('DELETE', `/devices/remove/${pendingDeviceRemoval.deviceId}`, {
+                    username: currentUser.username,
+                    password: currentUserPassword,
+                    confirmDelete: true
+                });
+
+                if (result.success) {
+                    closeModal('lastDeviceModal');
+                    hideLoadingModal();
+
+                    // Hide DB password display
+                    document.getElementById('dbPasswordDisplay').classList.add('hidden');
+
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Reload user status first
+                    await loadCurrentUser();
+
+
+                    setTimeout(async () => {
+                        console.log('🔄 Force reloading devices and sessions...');
+                        await loadDevices();
+                        await loadSessions();
+                        console.log('✅ All data reloaded successfully');
+                    }, 500);
+
+                    // Show success message
+                    showSuccess('2FA Disabled', result.message || 'Your last device has been removed and 2FA has been disabled.');
+                }
+            } catch (error) {
+                hideLoadingModal();
+                showErrorModal(error.message);
+            } finally {
+                pendingDeviceRemoval = null;
+            }
+        }
+
+        async function editDeviceName(deviceId, currentName) {
+            const nameElement = document.getElementById(`deviceName-${deviceId}`);
+            if (!nameElement) return; // Ensure element exists
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary utf8-support';
+            input.style.width = '200px';
+
+            nameElement.replaceWith(input);
+            input.focus();
+            input.select();
+
+            const saveEdit = async () => {
+                const newName = input.value.trim();
+
+                // Clean up event listeners to prevent multiple calls
+                input.removeEventListener('blur', saveEdit);
+                input.removeEventListener('keypress', keypressHandler);
+
+                if (newName && newName !== currentName) {
+                    try {
+                        const result = await apiRequest('PUT', `/devices/rename/${deviceId}`, {
+                            username: currentUser.username,
+                            password: currentUserPassword,
+                            newDeviceName: newName
+                        });
+
+                        if (result.success) {
+                            showSuccess('Device Renamed', `Device renamed to "${newName}"`);
+                            loadDevices();
+                            loadSessions(); // Refresh sessions to show updated device names
+                            return;
+                        }
+                    } catch (error) {
+                        showErrorModal(error.message);
+                    }
+                }
+
+                // Restore original name if API call failed or name didn't change
+                restoreOriginalName();
+            };
+
+            const restoreOriginalName = () => {
+                // Clean up event listeners before restoring
+                input.removeEventListener('blur', saveEdit);
+                input.removeEventListener('keypress', keypressHandler);
+
+                const span = document.createElement('span');
+                span.id = `deviceName-${deviceId}`;
+                span.className = 'device-name utf8-support';
+                span.textContent = currentName;
+                input.replaceWith(span);
+            };
+
+            const keypressHandler = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    restoreOriginalName();
+                }
+            };
+
+            input.addEventListener('blur', saveEdit);
+            input.addEventListener('keypress', keypressHandler);
+        }
+
+        // Enhanced device removal with modern confirmation
+        async function removeDevice(deviceId, deviceName) {
+            try {
+                // First attempt to remove device (no password required yet)
+                const result = await apiRequest('DELETE', `/devices/remove/${deviceId}`, {
+                    username: currentUser.username,
+                    password: currentUserPassword,
+                    confirmDelete: false
+                });
+
+                if (result.success) {
+                    showSuccess('Device Removed', `"${deviceName}" has been removed successfully.`);
+                    loadDevices();
+                    await loadCurrentUser();
+                }
+            } catch (error) {
+                // Check if this requires confirmation for last device
+                if (error.message.includes('This is your last device')) {
+                    // Show modern confirmation modal
+                    pendingDeviceRemoval = { deviceId, deviceName };
+                    document.getElementById('lastDeviceName').textContent = deviceName;
+                    showModal('lastDeviceModal');
+                } else {
+                    showErrorModal(error.message);
+                }
+            }
+        }
+
+
+
+        async function addNewDevice() {
+            // Request password before setting up 2FA, as setup-2fa API requires it.
+            try {
+                await requestPassword('Enter your password to add a new 2FA device.');
+                await show2FASetup();
+            } catch (error) {
+           
+                console.error("Add new device cancelled or failed:", error);
+            }
+        }
+
+        // Session management with device info display
+        async function loadSessions() {
+            try {
+                const sessions = await apiRequest('GET', `/sessions/list/${currentUser.username}`);
+                displaySessions(sessions.sessions || []);
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                showErrorModal('Failed to load sessions: ' + error.message);
+                displaySessions([]);
+            }
+        }
+
+        function displaySessions(sessions) {
+            const sessionsList = document.getElementById('sessionsList');
+
+            if (sessions.length === 0) {
+                sessionsList.innerHTML = '<p class="text-gray-500 text-center py-8">No active sessions</p>';
+                return;
+            }
+
+            sessionsList.innerHTML = sessions.map((session, index) => {
+                const deviceIcon = getDeviceIcon(session.deviceInfo || 'Unknown Device');
+
+                return `
+                    <div class="p-4 border rounded-lg mb-3 ${index === 0 ? 'border-primary bg-primary/5' : ''}">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center space-x-3">
+                                <div class="text-2xl">${deviceIcon}</div>
+                                <div>
+                                    <div class="font-medium flex items-center">
+                                        <span class="utf8-support">${session.deviceInfo || 'Unknown Device'}</span>
+                                        ${sessionToken === session.sessionToken ? '<span class="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Current</span>' : ''}
+                                    </div>
+                                    <div class="text-sm text-gray-500 mt-1">
+                                        <div>Device: ${session.deviceInfo || 'Unknown Device'}</div>
+                                        <div>Started: ${session.loginTime ? new Date(session.loginTime).toLocaleString() : 'Unknown'}</div>
+                                        <div>Last activity: ${session.lastUsed ? new Date(session.lastUsed).toLocaleString() : 'Unknown'}</div>
+                                        <div>2FA: ${session.authenticated2FA ? '✅ Verified' : '❌ Not verified'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function logoutAllSessions() {
+            // Re-authenticate password for sensitive action
+            try {
+                await requestPassword('Enter your password to log out all other sessions.');
+            } catch (error) {
+                console.error("Logout all sessions cancelled or failed:", error);
+                return; // Stop if password not provided or request cancelled
+            }
+
+            if (!confirm('This will log you out of all other sessions. Continue?')) return;
+
+            try {
+                showLoadingModal('Logging out other sessions...');
+                const result = await apiRequest('POST', '/sessions/logout-all', {
+                    username: currentUser.username,
+                    password: currentUserPassword 
+                });
+
+                if (result.success) {
+                    hideLoadingModal();
+                    showSuccess('Sessions Terminated', 'All other sessions have been terminated.');
+                    loadSessions();
+                    loadCurrentUser(); 
+                }
+            } catch (error) {
+                hideLoadingModal();
+                showErrorModal(error.message);
+            }
+        }
+
+        // Utility functions
+        function showDBPassword(password) {
+            document.getElementById('dbPasswordValue').textContent = password;
+            document.getElementById('dbPasswordDisplay').classList.remove('hidden');
+        }
+
+        function copyDBPassword() {
+            const password = document.getElementById('dbPasswordValue').textContent;
+            if (!navigator.clipboard) {
+                showErrorModal('Clipboard API not supported in your browser.');
+                return;
+            }
+            navigator.clipboard.writeText(password).then(() => {
+                showSuccess('Copied', 'Database password copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                showErrorModal('Failed to copy password to clipboard. Please copy manually.');
+            });
+        }
+
+        function copyManualKey() {
+            const key = document.getElementById('manualKey').textContent;
+            if (!navigator.clipboard) {
+                showErrorModal('Clipboard API not supported in your browser.');
+                return;
+            }
+            navigator.clipboard.writeText(key).then(() => {
+                showSuccess('Copied', 'Manual entry key copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                showErrorModal('Failed to copy key to clipboard. Please copy manually.');
+            });
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function showSuccess(title, message) {
+            document.getElementById('successTitle').textContent = title;
+            document.getElementById('successMessage').textContent = message;
+            showModal('successModal');
+        }
+
+        function showLoadingModal(text = 'Processing...') {
+            document.getElementById('loadingText').textContent = text;
+            showModal('loadingModal');
+        }
+
+        function hideLoadingModal() {
+            closeModal('loadingModal');
+        }
+
+        function showError(elementId, message) {
+            if (elementId) {
+                const errorEl = document.getElementById(elementId);
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+                errorEl.classList.add('error-shake');
+                setTimeout(() => {
+                    errorEl.classList.add('hidden');
+                    errorEl.classList.remove('error-shake');
+                }, 5000);
+            }
+        }
+
+        function hideError(elementId) {
+            const errorEl = document.getElementById(elementId);
+            errorEl.classList.add('hidden');
+            errorEl.classList.remove('error-shake');
+        }
+
+        function setLoadingState(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            const spinner = document.getElementById(btnId.replace('Btn', 'Spinner'));
+            const text = document.getElementById(btnId.replace('Btn', 'BtnText'));
+
+            if (!btn) return;
+
+            if (loading) {
+                btn.disabled = true;
+                spinner?.classList.remove('hidden');
+                if (text) text.textContent = 'Loading...';
+            } else {
+                btn.disabled = false;
+                spinner?.classList.add('hidden');
+                if (text) {
+                    if (btnId === 'loginBtn') text.textContent = 'Sign In';
+                    else if (btnId === 'setupBtn') text.textContent = 'Enable 2FA';
+                    else if (btnId === 'verifyBtn') text.textContent = 'Verify';
+                }
+            }
+        }
+
+        async function logout() {
+            try {
+                if (sessionToken) {
+                    await apiRequest('POST', '/sessions/logout', { sessionToken });
+                }
+
+                currentUser = null;
+                sessionToken = null;
+                currentUserPassword = null; // Clear stored password
+
+                document.getElementById('loginForm').reset();
+                document.getElementById('privacyConsent').checked = false;
+                // Re-disable login button if privacy consent is not checked.
+                const loginBtn = document.getElementById('loginBtn');
+                loginBtn.disabled = true;
+                loginBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                loginBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
+
+                document.getElementById('dbPasswordDisplay').classList.add('hidden');
+
+                document.getElementById('dashboardLayout').classList.add('hidden');
+                document.getElementById('loginContainer').classList.remove('hidden');
+            } catch (error) {
+                console.error('Logout error:', error);
+                showErrorModal('Failed to log out: ' + error.message);
+            }
+        }
+
+        // Global function exports
+        window.showTab = showTab;
+        window.logout = logout;
+        window.show2FASetup = show2FASetup;
+        window.removeDevice = removeDevice;
+        window.confirmRemoveLastDevice = confirmRemoveLastDevice;
+        window.editDeviceName = editDeviceName;
+        window.addNewDevice = addNewDevice;
+        window.logoutAllSessions = logoutAllSessions;
+        window.copyDBPassword = copyDBPassword;
+        window.copyManualKey = copyManualKey;
+        window.closeModal = closeModal;
+    </script>
+</body>
+
+</html>
