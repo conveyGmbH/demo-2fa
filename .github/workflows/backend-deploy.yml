@@ -77,7 +77,7 @@ jobs:
         with:
           app-name: 'LS2FABackend'
           slot-name: 'Production'
-          package: .
+          package: backend/
           
       - name: Test deployment
         run: |
