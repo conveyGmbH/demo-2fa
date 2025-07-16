@@ -39,7 +39,6 @@ jobs:
         id: idtoken
         with:
           script: |
-            const core = require('@actions/core')
             return await core.getIDToken()
           result-encoding: string
 
@@ -73,7 +72,7 @@ jobs:
           fi
           
           # Show file size for main files
-          echo "📊 Main files size:"
+          echo "Main files size:"
           du -h frontend/index.html 2>/dev/null || echo "index.html size check failed"
 
       - name: Build and Deploy to Azure Static Web Apps
