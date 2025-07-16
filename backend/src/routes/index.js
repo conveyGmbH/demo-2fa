@@ -121,14 +121,166 @@ class TOTPService {
     }
   }
 
+
+    /**
+   * Store pending 2FA setup temporarily
+   * @param {string} sessionToken - Session token as key
+   * @param {Object} setupData - Setup data to store
+   */
+  storePendingSetup(sessionToken, setupData) {
+    this.pendingSetups.set(sessionToken, {
+      ...setupData,
+      timestamp: Date.now()
+    });
+    log("INFO", "Pending setup stored", { sessionToken: sessionToken.substring(0, 8) + "..." });
+  }
+
+   /**
+   * Retrieve and remove pending setup
+   * @param {string} sessionToken - Session token
+   * @returns {Object|null} - Setup data or null if not found
+   */
+  getPendingSetup(sessionToken) {
+    const setup = this.pendingSetups.get(sessionToken);
+    if (setup) {
+      this.pendingSetups.delete(sessionToken);
+      log("INFO", "Pending setup retrieved", { sessionToken: sessionToken.substring(0, 8) + "..." });
+      return setup;
+    }
+    return null;
+  }
+
   /**
-   * Verify TOTP code with replay protection
+   * Verify TOTP code with secret
    * @param {string} secret - The TOTP secret
    * @param {string} token - The token to verify
    * @param {string} userId - User ID for replay protection
-   * @returns {boolean} - True if valid
+   * @returns {Object} - Verification result
    */
 
+  // async verifyTOTP(userId, token) {
+  //   try {
+  //     if (!/^\d{6}$/.test(token)) {
+  //       log("WARN", "Invalid TOTP format", {
+  //         userId,
+  //         token: token.substring(0, 2) + "****",
+  //       });
+  //       return { success: false, deviceId: null };
+  //     }
+
+  //     const codeKey = `${userId}:${token}`;
+
+  //     if (this.recentCodes.has(codeKey)) {
+  //       log("WARN", "TOTP code already used", { userId });
+  //       return { success: false, deviceId: null };
+  //     }
+
+  //     const devices = await databaseManager.query(
+  //       `SELECT SecretData 
+  //      FROM appblddbo.TwoFactorDevice 
+  //      WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
+  //       [userId]
+  //     );
+
+  //     if (devices.length === 0) {
+  //       log("WARN", "No active devices found for user", { userId });
+  //       return { success: false, deviceId: null };
+  //     }
+
+  //     // Track which device verified the token
+  //     for (const device of devices) {
+  //       const verified = speakeasy.totp.verify({
+  //         secret: device.SecretData,
+  //         encoding: "base32",
+  //         token,
+  //         window: CONFIG.totp.window,
+  //         algorithm: CONFIG.totp.algorithm,
+  //         digits: CONFIG.totp.digits,
+  //         step: CONFIG.totp.step,
+  //       });
+
+  //       if (verified) {
+  //         this.recentCodes.set(codeKey, Date.now());
+  //         log("INFO", "TOTP verified successfully", {
+  //           userId,
+  //           deviceId: device.TwoFactorDeviceID,
+  //           deviceInfo: device.DeviceInfo,
+  //         });
+
+  //         // Return both success and device ID
+  //         return {
+  //           success: true,
+  //           deviceId: device.TwoFactorDeviceID,
+  //           deviceInfo: device.DeviceInfo,
+  //         };
+  //       }
+  //     }     
+
+  //     log("WARN", "TOTP verification failed for all devices", {
+  //       userId,
+  //       devicesChecked: devices.length,
+  //     });
+
+  //     return { success: false, deviceId: null };
+  //   } catch (error) {
+  //     log("ERROR", "Error verifying TOTP", { userId, error: error.message });
+  //     return false;
+  //   }
+  // }
+
+  async verifyTOTPWithSecret(secret, token, userId = null) {
+    try {
+      if (!/^\d{6}$/.test(token)) {
+        log("WARN", "Invalid TOTP format", {
+          userId,
+          token: token.substring(0, 2) + "****",
+        });
+        return { success: false, error: "Invalid code format" };
+      }
+
+      // Check replay protection if userId provided
+      if (userId) {
+        const codeKey = `${userId}:${token}`;
+        if (this.recentCodes.has(codeKey)) {
+          log("WARN", "TOTP code already used", { userId });
+          return { success: false, error: "Code already used" };
+        }
+      }
+
+      const verified = speakeasy.totp.verify({
+        secret,
+        encoding: "base32",
+        token,
+        window: CONFIG.totp.window,
+        algorithm: CONFIG.totp.algorithm,
+        digits: CONFIG.totp.digits,
+        step: CONFIG.totp.step,
+      });
+
+      if (verified) {
+        // Mark code as used if userId provided
+        if (userId) {
+          const codeKey = `${userId}:${token}`;
+          this.recentCodes.set(codeKey, Date.now());
+        }
+        log("INFO", "TOTP verified successfully with secret", { userId });
+        return { success: true };
+      } else {
+        log("WARN", "TOTP verification failed with secret", { userId });
+        return { success: false, error: "Invalid code" };
+      }
+    } catch (error) {
+      log("ERROR", "Error verifying TOTP with secret", { userId, error: error.message });
+      return { success: false, error: "Verification failed" };
+    }
+  }
+
+  /**
+   * Verify TOTP code against active devices
+   * @param {string} userId - User ID
+   * @param {string} token - The token to verify
+   * @returns {Object} - Verification result
+   */
   async verifyTOTP(userId, token) {
     try {
       if (!/^\d{6}$/.test(token)) {
@@ -147,9 +299,9 @@ class TOTPService {
       }
 
       const devices = await databaseManager.query(
-        `SELECT SecretData 
-       FROM appblddbo.TwoFactorDevice 
-       WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
+        `SELECT TwoFactorDeviceID, SecretData, DeviceInfo
+         FROM appblddbo.TwoFactorDevice 
+         WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
         [userId]
       );
 
@@ -178,14 +330,13 @@ class TOTPService {
             deviceInfo: device.DeviceInfo,
           });
 
-          // Return both success and device ID
           return {
             success: true,
             deviceId: device.TwoFactorDeviceID,
             deviceInfo: device.DeviceInfo,
           };
         }
-      }     
+      }
 
       log("WARN", "TOTP verification failed for all devices", {
         userId,
@@ -195,9 +346,10 @@ class TOTPService {
       return { success: false, deviceId: null };
     } catch (error) {
       log("ERROR", "Error verifying TOTP", { userId, error: error.message });
-      return false;
+      return { success: false, deviceId: null };
     }
   }
+
 
   /**
    * Clear user's recent codes
@@ -215,11 +367,29 @@ class TOTPService {
   }
 
   /* Clean up old codes (called automatically)  */
+  // cleanupOldCodes() {
+  //   const now = Date.now();
+  //   const ttl = CONFIG.session.replayProtectionTTL;
+  //   let cleanedCount = 0;
+
+  //   for (const [key, timestamp] of this.recentCodes) {
+  //     if (now - timestamp > ttl) {
+  //       this.recentCodes.delete(key);
+  //       cleanedCount++;
+  //     }
+  //   }
+
+  //   if (cleanedCount > 0) {
+  //     log("DEBUG", `Cleaned up ${cleanedCount} old TOTP codes`);
+  //   }
+  // }
+
   cleanupOldCodes() {
     const now = Date.now();
     const ttl = CONFIG.session.replayProtectionTTL;
     let cleanedCount = 0;
 
+    // Clean up old TOTP codes
     for (const [key, timestamp] of this.recentCodes) {
       if (now - timestamp > ttl) {
         this.recentCodes.delete(key);
@@ -227,8 +397,18 @@ class TOTPService {
       }
     }
 
-    if (cleanedCount > 0) {
-      log("DEBUG", `Cleaned up ${cleanedCount} old TOTP codes`);
+    // Clean up expired pending setups (older than 10 minutes)
+    const setupTTL = 10 * 60 * 1000; // 10 minutes
+    let expiredSetups = 0;
+    for (const [sessionToken, setup] of this.pendingSetups) {
+      if (now - setup.timestamp > setupTTL) {
+        this.pendingSetups.delete(sessionToken);
+        expiredSetups++;
+      }
+    }
+
+    if (cleanedCount > 0 || expiredSetups > 0) {
+      log("DEBUG", `Cleaned up ${cleanedCount} old TOTP codes and ${expiredSetups} expired setups`);
     }
   }
 }
@@ -252,7 +432,6 @@ async function cleanupSessionsForDevice(username, deviceId) {
       try {
         const sessionData = JSON.parse(session.SessionInfo);
         
-        //Clean match by device ID
         if (sessionData.deviceId === deviceId) {
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
@@ -272,6 +451,7 @@ async function cleanupSessionsForDevice(username, deviceId) {
     throw error;
   }
 }
+
 
 // Initialize TOTP service
 const totpService = new TOTPService();
@@ -496,7 +676,6 @@ function detectDeviceFromUserAgent(userAgent, fallback = "Unknown Device") {
  */
 async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) {
   try {
-    // Get all sessions for the user
     const sessions = await databaseManager.query(
       "SELECT SessionToken, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
       [username]
@@ -504,12 +683,10 @@ async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) 
 
     let updatedCount = 0;
 
-    // Update each session's deviceInfo
     for (const session of sessions) {
       try {
         const sessionData = JSON.parse(session.SessionInfo);
         
-        // Only update if this session matches the old device
         if (sessionData.deviceInfo === oldDeviceInfo) {
           sessionData.deviceInfo = newDeviceInfo;
           const updatedSessionInfo = JSON.stringify(sessionData);
@@ -739,7 +916,7 @@ router.post("/auth/login", async (req, res) => {
       ipAddress: req.ip,
       userAgent: req.get("User-Agent"),
       deviceInfo: deviceInfo,
-      deviceId:null,
+      deviceId: null,
       sessionType: requires2FA ? "pending_2fa" : "authenticated",
     };
 
@@ -775,138 +952,71 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
+
 // Setup 2FA - Enhanced with proper cleanup
 router.post("/auth/setup-2fa", async (req, res) => {
-  await databaseManager.query("BEGIN TRANSACTION");
-
   try {
     const { username, password, deviceInfo = "Web Browser" } = req.body;
 
     if (!username || !password) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(400).json({
         success: false,
         message: "Username and password required",
       });
     }
 
-    // STEP 1: Verify credentials using enhanced method
+    // STEP 1: Verify credentials
     const isValidPassword = await verifyPasswordEnhanced({ username, password });
     if (!isValidPassword.success) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
 
-    // CRITICAL: Preserve original password BEFORE any operations
-    const originalPasswordHash = await preserveOriginalPassword(username);
-
-    // STEP 2: Create or get 2FA user
-    const user = await createOrGetTwoFactorUser(username, password);
-
-    // STEP 3: Check if user already has active devices
-    const existingDevices = await databaseManager.query(
-      "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ? AND Inactive IS NULL",
-      [user.TwoFactorUserID]
-    );
-
-    const hasActiveDevices = existingDevices[0].count > 0;
-    const isFirstSetup = !hasActiveDevices;
-
-    log('INFO', `Device check for ${username}`, { activeDevices: existingDevices[0].count, isFirstSetup });
-
-    // STEP 4: Clean up old devices ONLY if this is the first setup
-    if (isFirstSetup) {
-      log('INFO', `First setup detected - cleaning up old devices for user: ${username}`);
-      await databaseManager.query(
-        "DELETE FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ?",
-        [user.TwoFactorUserID]
-      );
-    }
-
-    // STEP 5: Generate TOTP with real service
+    // STEP 2: Generate TOTP secret (but don't save to DB yet)
     const totpData = await totpService.generateTOTP(username);
 
-    // STEP 6: Enhanced device info detection
+    // STEP 3: Enhanced device info detection
     const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
 
-    // STEP 7: Create new device
-    const deviceId = await addTwoFactorDevice(
-      user.TwoFactorUserID,
-      enhancedDeviceInfo,
-      totpData.secret
-    );
-
-    // STEP 8: Enable 2FA (set Disable2FA = 0)
-    await databaseManager.query(
-      "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 0 WHERE TwoFactorUserID = ?",
-      [user.TwoFactorUserID]
-    );
-
-    // CRITICAL: Restore original password IMMEDIATELY
-    const restored = await restoreOriginalPassword(username, originalPasswordHash);
-    if (!restored) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
-      throw new Error("Failed to restore original password");
-    }
-
-    // Create session for immediate verification
+    // STEP 4: Create temporary session token for this setup
     const sessionToken = uuidv4();
-    const sessionData = {
+
+    // STEP 5: Store the setup data temporarily (NOT in database)
+    const setupData = {
       username,
-      userId: user.TwoFactorUserID,
-      originalPassword: password,
-      originalPasswordHash,
-      loginTime: new Date().toISOString(),
-      requires2FA: true,
+      password,
+      deviceInfo: enhancedDeviceInfo,
+      totpSecret: totpData.secret,
       ipAddress: req.ip,
       userAgent: req.get("User-Agent"),
-      deviceInfo: enhancedDeviceInfo,
     };
 
-    await databaseManager.query(
-      "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
-      [sessionToken, username, JSON.stringify(sessionData)]
-    );
+    totpService.storePendingSetup(sessionToken, setupData);
 
-    // Commit all changes
-    await databaseManager.query("COMMIT TRANSACTION");
+    log('INFO', `2FA setup initiated (QR code generated)`, { username, deviceInfo: enhancedDeviceInfo });
 
-    log('INFO', `2FA setup completed`, { username, isFirstSetup, deviceInfo: enhancedDeviceInfo });
-
-    res.status(201).json({
+    // STEP 6: Return QR code and session token for verification
+    res.status(200).json({
       success: true,
-      message: isFirstSetup ? "2FA setup completed successfully" : "Additional device added successfully",
-      sessionToken, // Include session token for immediate verification
-      user: {
-        id: user.TwoFactorUserID,
-        username: username,
-        originalPasswordPreserved: true,
-      },
-      device: {
-        id: deviceId,
-        deviceInfo: enhancedDeviceInfo,
-        authMethod: "TOTP",
-      },
+      message: "2FA setup initiated - scan QR code and verify",
+      sessionToken,
       totpSetup: {
         secret: totpData.secret,
         qrCodeDataURL: totpData.qrCode,
         manualEntryKey: totpData.manualEntryKey,
         qrCodeData: totpData.uri,
       },
-      isFirstSetup: isFirstSetup,
-      existingDevicesCount: existingDevices[0].count,
       instructions: [
         "1. Open your authenticator app (Google Authenticator, Authy, etc.)",
         "2. Scan the QR code or enter the secret manually",
         "3. Enter the 6-digit code below to verify",
-        "4. Your original password will ALWAYS work for login",
+        "4. Device will be added to your account only after successful verification",
       ],
+      note: "No database changes made yet - verification required"
     });
   } catch (error) {
-    await databaseManager.query("ROLLBACK TRANSACTION");
     log('ERROR', '2FA setup error', { username: req.body.username, error: error.message });
     res.status(500).json({
       success: false,
@@ -917,6 +1027,9 @@ router.post("/auth/setup-2fa", async (req, res) => {
 });
 
 // Verify 2FA - Enhanced with device info and session management
+
+
+// Verify 2FA - Creates DB entries only after successful verification
 router.post("/auth/verify-2fa", async (req, res) => {
   try {
     const { sessionToken, totpCode } = req.body;
@@ -928,106 +1041,213 @@ router.post("/auth/verify-2fa", async (req, res) => {
       });
     }
 
-    await databaseManager.query("BEGIN TRANSACTION");
+    // STEP 1: Check if this is a pending setup verification
+    const pendingSetup = totpService.getPendingSetup(sessionToken);
+    
+    if (pendingSetup) {
+      // This is a NEW 2FA setup verification
+      await databaseManager.query("BEGIN TRANSACTION");
 
-    // Retrieve the session
-    const sessionQuery = await databaseManager.query(
-      "SELECT * FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
-      [sessionToken]
-    );
+      try {
+        // STEP 2: Verify the TOTP code with the temporary secret
+        const verification = await totpService.verifyTOTPWithSecret(
+          pendingSetup.totpSecret,
+          totpCode
+        );
 
-    if (sessionQuery.length === 0) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
-      return res.status(401).json({
-        success: false,
-        message: "Invalid or expired session",
-      });
-    }
+        if (!verification.success) {
+          await databaseManager.query("ROLLBACK TRANSACTION");
+          return res.status(401).json({
+            success: false,
+            message: verification.error || "Invalid TOTP code",
+          });
+        }
 
-    const sessionData = JSON.parse(sessionQuery[0].SessionInfo);
-    const { username, originalPasswordHash, userId } = sessionData;
+        // STEP 3: Code is valid - NOW create the user and device in DB
+        const originalPasswordHash = await preserveOriginalPassword(pendingSetup.username);
+        
+        // Create or get 2FA user
+        const user = await createOrGetTwoFactorUser(pendingSetup.username, pendingSetup.password);
 
-    const verificationResult = await totpService.verifyTOTP(userId, totpCode);
+        // Clean up old devices if this is first setup
+        const existingDevices = await databaseManager.query(
+          "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ? AND Inactive IS NULL",
+          [user.TwoFactorUserID]
+        );
 
-      if (!verificationResult.success) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
-      return res.status(401).json({
-        success: false,
-        message: "Invalid TOTP code",
-      });
-    }
+        const isFirstSetup = existingDevices[0].count === 0;
 
-    //Mark session as authenticated
-    const updatedSessionData = {
-      ...sessionData,
-      authenticated2FA: true,
-      authenticationTime: new Date().toISOString(),
-      deviceId: verificationResult.deviceId, 
-      verifiedDeviceInfo: verificationResult.deviceInfo,
-      sessionType: "fully_authenticated"
-    };
+        if (isFirstSetup) {
+          await databaseManager.query(
+            "DELETE FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ?",
+            [user.TwoFactorUserID]
+          );
+        }
 
-    await databaseManager.query(
-      "UPDATE appblddbo.TwoFactorSession SET LastUsedTS = CURRENT_TIMESTAMP, SessionInfo = ? WHERE SessionToken = ?",
-      [JSON.stringify(updatedSessionData), sessionToken]
-    );
+        // Create the device
+        const deviceId = await addTwoFactorDevice(
+          user.TwoFactorUserID,
+          pendingSetup.deviceInfo,
+          pendingSetup.totpSecret
+        );
 
-    // Activate 2FA for user (DBPassword generation)
-    log('INFO', `Calling PRC_ActivateTwoFactor for: ${username}`);
-    const activationResult = await databaseManager.query(
-      "SELECT * FROM appblddbo.PRC_ActivateTwoFactor(?)",
-      [username]
-    );
+        // Enable 2FA
+        await databaseManager.query(
+          "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 0 WHERE TwoFactorUserID = ?",
+          [user.TwoFactorUserID]
+        );
 
-    const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
-    let dbPassword = null;
+        // Restore original password
+        await restoreOriginalPassword(pendingSetup.username, originalPasswordHash);
 
-    if (activation.success) {
-      log('INFO', `PRC_ActivateTwoFactor successful`, {
-        username,
-        message: activation.message,
-      });
+        // Create authenticated session
+        const newSessionToken = uuidv4();
+        const sessionData = {
+          username: pendingSetup.username,
+          userId: user.TwoFactorUserID,
+          originalPassword: pendingSetup.password,
+          originalPasswordHash,
+          loginTime: new Date().toISOString(),
+          requires2FA: true,
+          authenticated2FA: true,
+          authenticationTime: new Date().toISOString(),
+          ipAddress: pendingSetup.ipAddress,
+          userAgent: pendingSetup.userAgent,
+          deviceInfo: pendingSetup.deviceInfo,
+          deviceId: deviceId,
+          sessionType: "fully_authenticated"
+        };
 
-      dbPassword = activation.data?.DBPassword;
+        await databaseManager.query(
+          "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+          [newSessionToken, pendingSetup.username, JSON.stringify(sessionData)]
+        );
 
-      const restored = await restoreOriginalPassword(username, originalPasswordHash);
-      if (!restored) {
-        log('ERROR', `Failed to restore original password for: ${username}`);
+        // Activate 2FA and generate DB password
+        const activationResult = await databaseManager.query(
+          "SELECT * FROM appblddbo.PRC_ActivateTwoFactor(?)",
+          [pendingSetup.username]
+        );
+
+        const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
+        const dbPassword = activation.success ? activation.data?.DBPassword : null;
+
+        await databaseManager.query("COMMIT TRANSACTION");
+
+        log('INFO', `2FA setup completed successfully`, { 
+          username: pendingSetup.username,
+          deviceId,
+          isFirstSetup 
+        });
+
+        return res.json({
+          success: true,
+          message: "2FA setup completed successfully",
+          sessionToken: newSessionToken,
+          user: {
+            username: pendingSetup.username,
+            id: user.TwoFactorUserID,
+            originalPasswordPreserved: true,
+          },
+          device: {
+            id: deviceId,
+            deviceInfo: pendingSetup.deviceInfo,
+            authMethod: "TOTP",
+          },
+          fullyAuthenticated: true,
+          dbPassword: dbPassword,
+          activation: {
+            success: activation.success,
+            message: activation.message,
+            dbPasswordGenerated: !!dbPassword,
+          },
+          isFirstSetup: isFirstSetup,
+        });
+
+      } catch (error) {
+        await databaseManager.query("ROLLBACK TRANSACTION");
+        throw error;
       }
     } else {
-      log('ERROR', `PRC_ActivateTwoFactor failed`, {
-        username,
-        message: activation.message,
+      // This is a regular 2FA verification for existing user
+      const sessionQuery = await databaseManager.query(
+        "SELECT * FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
+        [sessionToken]
+      );
+
+      if (sessionQuery.length === 0) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid or expired session",
+        });
+      }
+
+      const sessionData = JSON.parse(sessionQuery[0].SessionInfo);
+      const { username, originalPasswordHash, userId } = sessionData;
+
+      const verificationResult = await totpService.verifyTOTP(userId, totpCode);
+
+      if (!verificationResult.success) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid TOTP code",
+        });
+      }
+
+      // Mark session as authenticated
+      const updatedSessionData = {
+        ...sessionData,
+        authenticated2FA: true,
+        authenticationTime: new Date().toISOString(),
+        deviceId: verificationResult.deviceId,
+        verifiedDeviceInfo: verificationResult.deviceInfo,
+        sessionType: "fully_authenticated"
+      };
+
+      await databaseManager.query(
+        "UPDATE appblddbo.TwoFactorSession SET LastUsedTS = CURRENT_TIMESTAMP, SessionInfo = ? WHERE SessionToken = ?",
+        [JSON.stringify(updatedSessionData), sessionToken]
+      );
+
+      // Activate 2FA for user
+      const activationResult = await databaseManager.query(
+        "SELECT * FROM appblddbo.PRC_ActivateTwoFactor(?)",
+        [username]
+      );
+
+      const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
+      const dbPassword = activation.success ? activation.data?.DBPassword : null;
+
+      if (activation.success && originalPasswordHash) {
+        await restoreOriginalPassword(username, originalPasswordHash);
+      }
+
+      log('INFO', `2FA verification successful`, { username });
+
+      return res.json({
+        success: true,
+        message: "2FA verification successful",
+        sessionToken,
+        user: {
+          username,
+          id: userId,
+          originalPasswordPreserved: true,
+        },
+        fullyAuthenticated: true,
+        dbPassword: dbPassword,
+        activation: {
+          success: activation.success,
+          message: activation.message,
+          dbPasswordGenerated: !!dbPassword,
+        },
       });
     }
-
-    await databaseManager.query("COMMIT TRANSACTION");
-
-    log('INFO', `2FA verification successful`, { username });
-
-    return res.json({
-      success: true,
-      message: "2FA verification successful",
-      sessionToken,
-      user: {
-        username,
-        id: userId,
-        originalPasswordPreserved: true,
-      },
-      fullyAuthenticated: true,
-      dbPassword: dbPassword,
-      activation: {
-        success: activation.success,
-        message: activation.message,
-        dbPasswordGenerated: !!dbPassword,
-      },
-    });
-
   } catch (error) {
-    await databaseManager.query("ROLLBACK TRANSACTION");
+    if (databaseManager.getConnection()) {
+      await databaseManager.query("ROLLBACK TRANSACTION");
+    }
     log('ERROR', '2FA verification error', { error: error.message });
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
