@@ -1,5 +1,5 @@
 # .github/workflows/backend-deploy.yml
-# Based on working lsapisamplesbackend workflow + enhancements
+# Based on working lsapisamplesbackend workflow - WITHOUT environment section
 name: Build and deploy Node.js app to Azure Web App - LS2FABackend
 
 on:
@@ -80,9 +80,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
@@ -123,7 +120,6 @@ jobs:
           sleep 60
           
           echo "🧪 Testing backend endpoints..."
-          echo "Backend URL: ${{ steps.deploy-to-webapp.outputs.webapp-url }}"
           
           # Test 1: Root endpoint
           echo "📍 Testing root endpoint..."
