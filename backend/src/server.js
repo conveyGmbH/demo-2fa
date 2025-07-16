@@ -45,14 +45,9 @@ class Server {
                 // List of allowed origins
                 const allowedOrigins = [
                     // Production URLs
-                    'https://brave-bay-061146803.1.azurestaticapps.net',
-                    'https://deimos.convey.de', 
-                    
-
-                    // Dev URLs
-                    'http://localhost:3000',
-                    'http://localhost:8080',
-                    'http://localhost:8000',                  
+                    'https://deimos.convey.de/2fabackend',
+                                        
+                    // Dev URLs                                     
                     'http://localhost:51170',
                     'http://localhost:4000',
                 ];
