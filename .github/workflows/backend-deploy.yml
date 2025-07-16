@@ -60,9 +60,10 @@ jobs:
           
       - name: Unzip artifact for deployment
         run: |
-          unzip backend-release.zip
-          echo "Files after unzip:"
-          ls -la
+          mkdir backend
+          unzip backend-release.zip -d backend
+          echo "✅ Backend folder created:"
+          ls -la backend
         
       - name: Login to Azure
         uses: azure/login@v2
