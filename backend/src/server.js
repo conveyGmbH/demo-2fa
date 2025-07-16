@@ -45,7 +45,7 @@ class Server {
                 // List of allowed origins
                 const allowedOrigins = [
                     // Production URLs
-                    'https://deimos.convey.de/2fabackend',
+                    'https://deimos.convey.de',
                                         
                     // Dev URLs                                     
                     'http://localhost:51170',
