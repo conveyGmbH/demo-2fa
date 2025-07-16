@@ -81,7 +81,7 @@ jobs:
           
       - name: Test deployment
         run: |
-          echo "⏳ Attente du déploiement (30s)..."
+          echo "⏳ Waiting for deployment (30s)..."
           sleep 30
-          echo "🧪 Test des endpoints backend..."
+          echo "🧪 Testing backend health endpoint..."
           curl -f https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1/health || echo "❌ Health check failed"
