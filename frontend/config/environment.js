@@ -1,7 +1,7 @@
 
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
-// ✅ Configuration des URLs selon l'environnement
+// Configuration 
 const config = {
     // Environment detection
     isProduction: isProduction,
