@@ -32,7 +32,7 @@ jobs:
         run: |
           # Remplacer localhost par Azure backend URL
           find frontend -name "*.html" -type f -exec sed -i 's|http://localhost:4000/api/v1|https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1|g' {} \;
-          echo "✅ API URLs updated for production"
+          echo "API URLs updated for production"
 
       - name: Build And Deploy
         id: builddeploy
