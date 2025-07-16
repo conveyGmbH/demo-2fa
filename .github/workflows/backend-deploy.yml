@@ -25,20 +25,91 @@ jobs:
           cache: 'npm'
           cache-dependency-path: backend/package.json
       
+      - name: Validate backend structure
+        run: |
+          cd backend
+          echo "📁 Backend structure validation:"
+          ls -la
+          
+          # Vérifier les fichiers critiques
+          if [ ! -f "src/server.js" ]; then
+            echo "❌ ERROR: src/server.js not found!"
+            exit 1
+          fi
+          
+          if [ ! -f "package.json" ]; then
+            echo "❌ ERROR: package.json not found!"
+            exit 1
+          fi
+          
+          echo "✅ Critical files found"
+          
+          # Vérifier le script start dans package.json
+          if grep -q '"start".*"node src/server.js"' package.json; then
+            echo "✅ Start script is correct"
+          else
+            echo "⚠️  Start script might need adjustment"
+            grep -A 5 '"scripts"' package.json
+          fi
+      
       - name: Install backend dependencies
         run: |
           cd backend
           npm ci --production
+          echo "✅ Dependencies installed"
+          
+      - name: Create web.config for Azure App Service
+        run: |
+          cd backend
+          echo "🔧 Creating web.config for Azure App Service..."
+          cat > web.config << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <system.webServer>
+              <handlers>
+                <add name="iisnode" path="src/server.js" verb="*" modules="iisnode"/>
+              </handlers>
+              <rewrite>
+                <rules>
+                  <rule name="DynamicContent">
+                    <conditions>
+                      <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
+                    </conditions>
+                    <action type="Rewrite" url="src/server.js"/>
+                  </rule>
+                </rules>
+              </rewrite>
+              <httpErrors existingResponse="PassThrough" />
+              <iisnode 
+                node_env="production"
+                nodeProcessCountPerApplication="1"
+                maxConcurrentRequestsPerProcess="1024"
+                watchedFiles="*.js"
+                loggingEnabled="true"
+                devErrorsEnabled="false"
+              />
+            </system.webServer>
+          </configuration>
+          EOF
+          echo "✅ web.config created"
           
       - name: Create deployment package from backend folder
         run: |
           cd backend
+          echo "📦 Creating deployment package..."
+          
+          # Créer le package avec web.config inclus
           zip -r ../backend-release.zip . \
             -x "node_modules/.cache/*" \
             -x "*.log" \
             -x ".env*" \
             -x ".git*"
+          
           echo "✅ Backend package created from backend/ folder"
+          
+          # Vérifier le contenu du package
+          echo "📋 Package contents verification:"
+          unzip -l ../backend-release.zip | grep -E "(src/server.js|package.json|web.config)" || echo "⚠️  Some critical files might be missing"
           
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -58,12 +129,21 @@ jobs:
         with:
           name: backend-app
           
-      - name: Unzip artifact for deployment
+      - name: Unzip and validate artifact for deployment
         run: |
-          mkdir backend
-          unzip backend-release.zip -d backend
-          echo "✅ Backend folder created:"
-          ls -la backend
+          unzip backend-release.zip
+          echo "📁 Files after unzip:"
+          ls -la
+          
+          # Vérifier les fichiers critiques
+          echo "🔍 Critical files verification:"
+          ls -la src/server.js && echo "✅ src/server.js found" || echo "❌ src/server.js MISSING"
+          ls -la package.json && echo "✅ package.json found" || echo "❌ package.json MISSING"
+          ls -la web.config && echo "✅ web.config found" || echo "❌ web.config MISSING"
+          
+          # Vérifier le contenu du package.json
+          echo "📄 Package.json start script:"
+          grep -A 5 '"scripts"' package.json || echo "No scripts found"
         
       - name: Login to Azure
         uses: azure/login@v2
@@ -78,11 +158,97 @@ jobs:
         with:
           app-name: 'LS2FABackend'
           slot-name: 'Production'
-          package: backend/
+          package: .
           
-      - name: Test deployment
+      - name: Configure Azure App Service settings
         run: |
-          echo "⏳ Waiting for deployment (30s)..."
-          sleep 30
-          echo "🧪 Testing backend health endpoint..."
-          curl -f https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1/health || echo "❌ Health check failed"
+          echo "🔧 Configuring Azure App Service settings..."
+          
+          # Définir le startup command
+          az webapp config set \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP || 'defaultResourceGroup' }} \
+            --name LS2FABackend \
+            --startup-file "node src/server.js" \
+            --always-on true \
+            --http20-enabled true
+          
+          # Définir les variables d'environnement
+          az webapp config appsettings set \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP || 'defaultResourceGroup' }} \
+            --name LS2FABackend \
+            --settings \
+              NODE_ENV=production \
+              WEBSITE_NODE_DEFAULT_VERSION=20.x \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+              WEBSITES_ENABLE_APP_SERVICE_STORAGE=false
+          
+          echo "✅ Azure App Service configured"
+          
+      - name: Restart Azure App Service
+        run: |
+          echo "🔄 Restarting Azure App Service..."
+          az webapp restart \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP || 'defaultResourceGroup' }} \
+            --name LS2FABackend
+          echo "✅ App Service restarted"
+          
+      - name: Extended deployment testing
+        run: |
+          echo "⏳ Waiting for deployment to stabilize (90s)..."
+          sleep 90
+          
+          echo "🧪 Testing backend endpoints..."
+          
+          # Test 1: Root endpoint
+          echo "📍 Testing root endpoint..."
+          ROOT_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/root_response.txt https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/)
+          echo "Root response code: $ROOT_RESPONSE"
+          if [ "$ROOT_RESPONSE" = "200" ]; then
+            echo "✅ Root endpoint responding"
+            cat /tmp/root_response.txt
+          else
+            echo "❌ Root endpoint failed"
+            cat /tmp/root_response.txt
+          fi
+          
+          # Test 2: Health endpoint
+          echo "📍 Testing health endpoint..."
+          HEALTH_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/health_response.txt https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1/health)
+          echo "Health response code: $HEALTH_RESPONSE"
+          if [ "$HEALTH_RESPONSE" = "200" ]; then
+            echo "✅ Health endpoint responding"
+            cat /tmp/health_response.txt
+          else
+            echo "❌ Health endpoint failed"
+            cat /tmp/health_response.txt
+          fi
+          
+          # Test 3: API base endpoint
+          echo "📍 Testing API base endpoint..."
+          API_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/api_response.txt https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1)
+          echo "API response code: $API_RESPONSE"
+          if [ "$API_RESPONSE" = "200" ]; then
+            echo "✅ API base endpoint responding"
+            cat /tmp/api_response.txt
+          else
+            echo "❌ API base endpoint failed"
+            cat /tmp/api_response.txt
+          fi
+          
+          # Test 4: CORS preflight
+          echo "📍 Testing CORS preflight..."
+          CORS_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/cors_response.txt \
+            -X OPTIONS \
+            -H "Origin: https://brave-bay-061146803.1.azurestaticapps.net" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: Content-Type" \
+            https://ls2fabackend-fthub6cvegdeagbv.westeurope-01.azurewebsites.net/api/v1/auth/login)
+          echo "CORS response code: $CORS_RESPONSE"
+          if [ "$CORS_RESPONSE" = "200" ] || [ "$CORS_RESPONSE" = "204" ]; then
+            echo "✅ CORS preflight working"
+          else
+            echo "❌ CORS preflight failed"
+            cat /tmp/cors_response.txt
+          fi
+          
+          echo "✅ Deployment testing completed"
