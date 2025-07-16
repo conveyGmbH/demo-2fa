@@ -8,16 +8,21 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 const config = require('./config/config.js');
 
+
+// Load environment variables from .env file
+require('dotenv').config();
+
+
 console.log('🚀 Starting server...');
 
 // Import routes with error handling
 let routes;
 try {
     routes = require('./routes');
-    console.log('✅ Routes imported successfully');
+    console.log('Routes imported successfully');
 } catch (error) {
-    console.error('❌ Error importing routes:', error.message);
-    console.log('⚠️ Server will start without routes - check routes/index.js');
+    console.error('Error importing routes:', error.message);
+    console.log('Server will start without routes - check routes/index.js');
 }
 
 class Server {
@@ -62,7 +67,7 @@ class Server {
                 if (allowedOrigins.indexOf(origin) !== -1) {
                     callback(null, true);
                 } else {
-                    console.log(`❌ CORS: Origin not allowed: ${origin}`);
+                    console.log(`CORS: Origin not allowed: ${origin}`);
                     callback(new Error('Not allowed by CORS'));
                 }
             },
@@ -90,7 +95,7 @@ class Server {
     }
 
     setupRoutes() {
-        console.log('🛣️ Setting up routes...');
+        console.log('Setting up routes...');
         
         // Root endpoint
         this.app.get('/', (req, res) => {
@@ -147,8 +152,8 @@ class Server {
             await databaseManager.connect();
             console.log('✅ Database connected');
 
-            const port = 4000;
-            console.log("🚀 Starting server on port:", port);
+            const port = process.env.PORT || 4000; 
+            console.log("Starting server on port:", port);
             
             this.app.listen(port, () => {
                 logger.info(`Server listening on port ${port}`);

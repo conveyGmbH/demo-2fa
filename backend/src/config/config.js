@@ -6,7 +6,7 @@ require('dotenv').config();
 const config = {
     // Server configuration
     server: {
-        port: process.env.PORT,
+        port: process.env.DB_PORT,
         host: process.env.HOST,
         env: process.env.NODE_ENV || 'development'
     },
