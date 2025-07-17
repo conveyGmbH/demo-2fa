@@ -227,76 +227,93 @@ class TOTPService {
    * @param {string} token - The token to verify
    * @returns {Object} - Verification result
    */
-  // async verifyTOTP(userId, token) {
-  //   try {
-  //     if (!/^\d{6}$/.test(token)) {
-  //       log("WARN", "Invalid TOTP format", {
-  //         userId,
-  //         token: token.substring(0, 2) + "****",
-  //       });
-  //       return { success: false, deviceId: null };
-  //     }
+  
 
-  //     const codeKey = `${userId}:${token}`;
+//   async verifyTOTP(userId, token) {
+//   try {
+//     // ✅ CONVERSION OBLIGATOIRE EN INTEGER
+//     const userIdInt = parseInt(userId);
+//     if (isNaN(userIdInt)) {
+//       log('ERROR', 'Invalid userId - not a number', { 
+//         userId, 
+//         type: typeof userId 
+//       });
+//       return { success: false, deviceId: null };
+//     }
 
-  //     if (this.recentCodes.has(codeKey)) {
-  //       log("WARN", "TOTP code already used", { userId });
-  //       return { success: false, deviceId: null };
-  //     }
+//     if (!/^\d{6}$/.test(token)) {
+//       log("WARN", "Invalid TOTP format", {
+//         userId: userIdInt,
+//         token: token.substring(0, 2) + "****",
+//       });
+//       return { success: false, deviceId: null };
+//     }
 
-  //     const devices = await databaseManager.query(
-  //       `SELECT TwoFactorDeviceID, SecretData, DeviceInfo
-  //        FROM appblddbo.TwoFactorDevice 
-  //        WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
-  //       [userId]
-  //     );
+//     const codeKey = `${userIdInt}:${token}`;
 
-  //     if (devices.length === 0) {
-  //       log("WARN", "No active devices found for user", { userId });
-  //       return { success: false, deviceId: null };
-  //     }
+//     if (this.recentCodes.has(codeKey)) {
+//       log("WARN", "TOTP code already used", { userId: userIdInt });
+//       return { success: false, deviceId: null };
+//     }
 
-  //     // Track which device verified the token
-  //     for (const device of devices) {
-  //       const verified = speakeasy.totp.verify({
-  //         secret: device.SecretData,
-  //         encoding: "base32",
-  //         token,
-  //         window: CONFIG.totp.window,
-  //         algorithm: CONFIG.totp.algorithm,
-  //         digits: CONFIG.totp.digits,
-  //         step: CONFIG.totp.step,
-  //       });
+//     // ✅ UTILISER L'INTEGER DANS LA REQUÊTE
+//     const devices = await databaseManager.query(
+//       `SELECT TwoFactorDeviceID, SecretData, DeviceInfo
+//        FROM appblddbo.TwoFactorDevice 
+//        WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
+//       [userIdInt] // ← INTEGER au lieu de string
+//     );
 
-  //       if (verified) {
-  //         this.recentCodes.set(codeKey, Date.now());
-  //         log("INFO", "TOTP verified successfully", {
-  //           userId,
-  //           deviceId: device.TwoFactorDeviceID,
-  //           deviceInfo: device.DeviceInfo,
-  //         });
+//     if (devices.length === 0) {
+//       log("WARN", "No active devices found for user", { userId: userIdInt });
+//       return { success: false, deviceId: null };
+//     }
 
-  //         return {
-  //           success: true,
-  //           deviceId: device.TwoFactorDeviceID,
-  //           deviceInfo: device.DeviceInfo,
-  //         };
-  //       }
-  //     }
+//     // Track which device verified the token
+//     for (const device of devices) {
+//       const verified = speakeasy.totp.verify({
+//         secret: device.SecretData,
+//         encoding: "base32",
+//         token,
+//         window: CONFIG.totp.window,
+//         algorithm: CONFIG.totp.algorithm,
+//         digits: CONFIG.totp.digits,
+//         step: CONFIG.totp.step,
+//       });
 
-  //     log("WARN", "TOTP verification failed for all devices", {
-  //       userId,
-  //       devicesChecked: devices.length,
-  //     });
+//       if (verified) {
+//         this.recentCodes.set(codeKey, Date.now());
+//         log("INFO", "TOTP verified successfully", {
+//           userId: userIdInt,
+//           deviceId: device.TwoFactorDeviceID,
+//           deviceInfo: device.DeviceInfo,
+//         });
 
-  //     return { success: false, deviceId: null };
-  //   } catch (error) {
-  //     log("ERROR", "Error verifying TOTP", { userId, error: error.message });
-  //     return { success: false, deviceId: null };
-  //   }
-  // }
+//         return {
+//           success: true,
+//           deviceId: device.TwoFactorDeviceID,
+//           deviceInfo: device.DeviceInfo,
+//         };
+//       }
+//     }
 
-  async verifyTOTP(userId, token) {
+//     log("WARN", "TOTP verification failed for all devices", {
+//       userId: userIdInt,
+//       devicesChecked: devices.length,
+//     });
+
+//     return { success: false, deviceId: null };
+//   } catch (error) {
+//     log("ERROR", "Error verifying TOTP", { 
+//       userId: parseInt(userId), 
+//       error: error.message 
+//     });
+//     return { success: false, deviceId: null };
+//   }
+// }
+
+
+async verifyTOTP(userId, token) {
   try {
     // ✅ CONVERSION OBLIGATOIRE EN INTEGER
     const userIdInt = parseInt(userId);
@@ -323,13 +340,24 @@ class TOTPService {
       return { success: false, deviceId: null };
     }
 
-    // ✅ UTILISER L'INTEGER DANS LA REQUÊTE
+    // Use Integer in the query
     const devices = await databaseManager.query(
       `SELECT TwoFactorDeviceID, SecretData, DeviceInfo
        FROM appblddbo.TwoFactorDevice 
        WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
       [userIdInt] // ← INTEGER au lieu de string
     );
+
+    // DEBUG: Display alls device found
+    log("DEBUG", "TOTP verification - devices found", {
+      userId: userIdInt,
+      deviceCount: devices.length,
+      devices: devices.map(d => ({
+        id: d.TwoFactorDeviceID,
+        info: d.DeviceInfo,
+        secretPreview: d.SecretData ? d.SecretData.substring(0, 4) + "..." : "NO_SECRET"
+      }))
+    });
 
     if (devices.length === 0) {
       log("WARN", "No active devices found for user", { userId: userIdInt });
@@ -338,6 +366,13 @@ class TOTPService {
 
     // Track which device verified the token
     for (const device of devices) {
+      log("DEBUG", "Testing device", {
+        deviceId: device.TwoFactorDeviceID,
+        deviceInfo: device.DeviceInfo,
+        secretLength: device.SecretData ? device.SecretData.length : 0,
+        token: token.substring(0, 2) + "****"
+      });
+
       const verified = speakeasy.totp.verify({
         secret: device.SecretData,
         encoding: "base32",
@@ -346,6 +381,12 @@ class TOTPService {
         algorithm: CONFIG.totp.algorithm,
         digits: CONFIG.totp.digits,
         step: CONFIG.totp.step,
+      });
+
+      log("DEBUG", "TOTP verification result", {
+        deviceId: device.TwoFactorDeviceID,
+        verified: verified,
+        secretPreview: device.SecretData.substring(0, 4) + "..."
       });
 
       if (verified) {
@@ -367,6 +408,10 @@ class TOTPService {
     log("WARN", "TOTP verification failed for all devices", {
       userId: userIdInt,
       devicesChecked: devices.length,
+      testedDevices: devices.map(d => ({
+        id: d.TwoFactorDeviceID,
+        info: d.DeviceInfo
+      }))
     });
 
     return { success: false, deviceId: null };
@@ -378,9 +423,6 @@ class TOTPService {
     return { success: false, deviceId: null };
   }
 }
-
-
-
 
   /**
    * Verify TOTP code during setup (before DB changes)
