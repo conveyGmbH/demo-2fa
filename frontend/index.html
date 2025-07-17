@@ -571,6 +571,7 @@
         let currentSetupData = null;
         let pendingDeviceRemoval = null;
         let currentUserPassword = null;
+        let setupSessionToken = null
 
         // Initialization
         document.addEventListener('DOMContentLoaded', function () {
@@ -660,11 +661,6 @@
                 throw error;
 
             }
-
-
-
-
-
         }
 
         //  error handling 
@@ -753,7 +749,7 @@
 
             try {
                 const result = await apiRequest('POST', '/auth/verify-2fa', {
-                    sessionToken,
+                    sessionToken : setupSessionToken,
                     totpCode: code
                 });
 
@@ -789,6 +785,10 @@
 
                 if (result.success) {
                     currentSetupData = result;
+                    setupSessionToken = result.sessionToken;
+
+                    console.log('🔧 Setup session token stored:', setupSessionToken.substring(0, 8) + '...');
+
 
                     const qrImg = document.getElementById('qrCodeImage');
                     const qrLoading = document.getElementById('qrCodeLoading');
@@ -808,42 +808,109 @@
             }
         }
 
-        async function handleSetup2FA(e) {
-            e.preventDefault();
+        // async function handleSetup2FA(e) {
+        //     e.preventDefault();
 
-            const code = document.getElementById('setupCode').value;
+        //     const code = document.getElementById('setupCode').value;
 
-            setLoadingState('setupBtn', true);
-            hideError('setupError');
+        //     setLoadingState('setupBtn', true);
+        //     hideError('setupError');
 
-            try {
-                const result = await apiRequest('POST', '/auth/verify-2fa', {
-                    sessionToken,
-                    totpCode: code
-                });
+        //     try {
 
-                if (result.success) {
-                    closeModal('setup2FAModal');
-                    document.getElementById('setupCode').value = '';
+        //     console.log('🔧 Using setup session token:', setupSessionToken.substring(0, 8) + '...');
 
-                    if (result.dbPassword) {
-                        showDBPassword(result.dbPassword);
-                    }
 
-                    showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
-                    await loadCurrentUser();
-                    loadDevices();
-                }
-            } catch (error) {
-                showError('setupError', error.message);
-                document.getElementById('setupCode').value = '';
-                document.getElementById('setupCode').focus();
-            } finally {
-                setLoadingState('setupBtn', false);
-            }
-        }
+        //         const result = await apiRequest('POST', '/auth/verify-2fa', {
+        //             sessionToken : setupSessionToken,
+        //             totpCode: code
+        //         });
+
+        //         if (result.success) {
+        //             closeModal('setup2FAModal');
+        //             document.getElementById('setupCode').value = '';
+
+
+        //               // ✅ NOUVEAU : Mettre à jour le sessionToken global
+        //     if (result.sessionToken) {
+        //         sessionToken = result.sessionToken;
+        //         console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
+        //     }
+
+          
+        //     currentSetupData = null;
+        //     setupSessionToken = null;
+            
+        //     if (result.dbPassword) {
+        //                 showDBPassword(result.dbPassword);
+        //             }
+
+        //             showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
+        //             await loadCurrentUser();
+        //             loadDevices();
+        //         }
+        //     } catch (error) {
+        //         showError('setupError', error.message);
+        //         document.getElementById('setupCode').value = '';
+        //         document.getElementById('setupCode').focus();
+        //     } finally {
+        //         setLoadingState('setupBtn', false);
+        //     }
+        // }
 
         // Navigation
+        
+        // Frontend JavaScript updates
+
+async function handleSetup2FA(e) {
+  e.preventDefault();
+
+  const code = document.getElementById('setupCode').value;
+
+  setLoadingState('setupBtn', true);
+  hideError('setupError');
+
+  try {
+    console.log('🔧 Using setup session token:', setupSessionToken.substring(0, 8) + '...');
+
+    const result = await apiRequest('POST', '/auth/verify-2fa', {
+      sessionToken: setupSessionToken,
+      totpCode: code
+    });
+
+    if (result.success) {
+      closeModal('setup2FAModal');
+      document.getElementById('setupCode').value = '';
+
+      // Update global session token
+      if (result.sessionToken) {
+        sessionToken = result.sessionToken;
+        console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
+      }
+
+      currentSetupData = null;
+      setupSessionToken = null;
+      
+      if (result.dbPassword) {
+        showDBPassword(result.dbPassword);
+      }
+
+      showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
+      await loadCurrentUser();
+      loadDevices();
+    }
+  } catch (error) {
+    showError('setupError', error.message);
+    document.getElementById('setupCode').value = '';
+    document.getElementById('setupCode').focus();
+  } finally {
+    setLoadingState('setupBtn', false);
+  }
+}
+        
+        
+        
+        
         function showDashboard(data) {
             document.getElementById('loginContainer').classList.add('hidden');
             document.getElementById('dashboardLayout').classList.remove('hidden');
@@ -1448,7 +1515,8 @@
 
                 currentUser = null;
                 sessionToken = null;
-                currentUserPassword = null; // Clear stored password
+                currentUserPassword = null; 
+                setupSessionToken = null;
 
                 document.getElementById('loginForm').reset();
                 document.getElementById('privacyConsent').checked = false;
