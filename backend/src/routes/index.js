@@ -1667,8 +1667,8 @@ router.post("/auth/verify-2fa", async (req, res) => {
       const { username, originalPasswordHash, userId } = sessionData;
 
       // ✅ VALIDATION ET CONVERSION
-      const userIdInt = parseInt(userId);
-      if (isNaN(userIdInt)) {
+      const userIdInt = userId ? parseInt(userId) : null;
+      if (userId && isNaN(userIdInt)) {
         log('ERROR', 'Invalid userId in session', { 
           userId, 
           type: typeof userId,
@@ -1679,6 +1679,15 @@ router.post("/auth/verify-2fa", async (req, res) => {
           message: "Invalid session data - userId not numeric"
         });
       }
+
+      if (!userIdInt) {
+        return res.status(400).json({
+          success: false,
+          message: "User does not have 2FA enabled",
+        });
+      }
+
+
 
       log('DEBUG', 'Session userId validation', {
         originalUserId: userId,
