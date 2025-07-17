@@ -27,7 +27,7 @@ const CONFIG = {
   },
   logging: {
     enabled: true,
-    sensitive: false // Set to true in development to see sensitive data
+    sensitive: false // Set to true in production to mask sensitive data
   }
 };
 
@@ -75,6 +75,7 @@ function log(level, message, data = null) {
 class TOTPService {
   constructor() {
     this.recentCodes = new Map();
+    this.pendingSetups = new Map();
     this.cleanupInterval = setInterval(
       () => this.cleanupOldCodes(),
       CONFIG.session.cleanupInterval
@@ -121,8 +122,7 @@ class TOTPService {
     }
   }
 
-
-    /**
+  /**
    * Store pending 2FA setup temporarily
    * @param {string} sessionToken - Session token as key
    * @param {Object} setupData - Setup data to store
@@ -130,12 +130,14 @@ class TOTPService {
   storePendingSetup(sessionToken, setupData) {
     this.pendingSetups.set(sessionToken, {
       ...setupData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    log("INFO", "Pending setup stored", { sessionToken: sessionToken.substring(0, 8) + "..." });
+    log("INFO", "Pending setup stored", {
+      sessionToken: sessionToken.substring(0, 8) + "...",
+    });
   }
 
-   /**
+  /**
    * Retrieve and remove pending setup
    * @param {string} sessionToken - Session token
    * @returns {Object|null} - Setup data or null if not found
@@ -143,11 +145,22 @@ class TOTPService {
   getPendingSetup(sessionToken) {
     const setup = this.pendingSetups.get(sessionToken);
     if (setup) {
-      this.pendingSetups.delete(sessionToken);
-      log("INFO", "Pending setup retrieved", { sessionToken: sessionToken.substring(0, 8) + "..." });
+      log("INFO", "Pending setup retrieved (not deleted)", {
+        sessionToken: sessionToken.substring(0, 8) + "...",
+      });
       return setup;
     }
     return null;
+  }
+
+  removePendingSetup(sessionToken) {
+    if (this.pendingSetups.delete(sessionToken)) {
+      log("INFO", "Pending setup removed after successful verification", {
+        sessionToken: sessionToken.substring(0, 8) + "...",
+      });
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -157,76 +170,6 @@ class TOTPService {
    * @param {string} userId - User ID for replay protection
    * @returns {Object} - Verification result
    */
-
-  // async verifyTOTP(userId, token) {
-  //   try {
-  //     if (!/^\d{6}$/.test(token)) {
-  //       log("WARN", "Invalid TOTP format", {
-  //         userId,
-  //         token: token.substring(0, 2) + "****",
-  //       });
-  //       return { success: false, deviceId: null };
-  //     }
-
-  //     const codeKey = `${userId}:${token}`;
-
-  //     if (this.recentCodes.has(codeKey)) {
-  //       log("WARN", "TOTP code already used", { userId });
-  //       return { success: false, deviceId: null };
-  //     }
-
-  //     const devices = await databaseManager.query(
-  //       `SELECT SecretData 
-  //      FROM appblddbo.TwoFactorDevice 
-  //      WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
-  //       [userId]
-  //     );
-
-  //     if (devices.length === 0) {
-  //       log("WARN", "No active devices found for user", { userId });
-  //       return { success: false, deviceId: null };
-  //     }
-
-  //     // Track which device verified the token
-  //     for (const device of devices) {
-  //       const verified = speakeasy.totp.verify({
-  //         secret: device.SecretData,
-  //         encoding: "base32",
-  //         token,
-  //         window: CONFIG.totp.window,
-  //         algorithm: CONFIG.totp.algorithm,
-  //         digits: CONFIG.totp.digits,
-  //         step: CONFIG.totp.step,
-  //       });
-
-  //       if (verified) {
-  //         this.recentCodes.set(codeKey, Date.now());
-  //         log("INFO", "TOTP verified successfully", {
-  //           userId,
-  //           deviceId: device.TwoFactorDeviceID,
-  //           deviceInfo: device.DeviceInfo,
-  //         });
-
-  //         // Return both success and device ID
-  //         return {
-  //           success: true,
-  //           deviceId: device.TwoFactorDeviceID,
-  //           deviceInfo: device.DeviceInfo,
-  //         };
-  //       }
-  //     }     
-
-  //     log("WARN", "TOTP verification failed for all devices", {
-  //       userId,
-  //       devicesChecked: devices.length,
-  //     });
-
-  //     return { success: false, deviceId: null };
-  //   } catch (error) {
-  //     log("ERROR", "Error verifying TOTP", { userId, error: error.message });
-  //     return false;
-  //   }
-  // }
 
   async verifyTOTPWithSecret(secret, token, userId = null) {
     try {
@@ -270,7 +213,10 @@ class TOTPService {
         return { success: false, error: "Invalid code" };
       }
     } catch (error) {
-      log("ERROR", "Error verifying TOTP with secret", { userId, error: error.message });
+      log("ERROR", "Error verifying TOTP with secret", {
+        userId,
+        error: error.message,
+      });
       return { success: false, error: "Verification failed" };
     }
   }
@@ -350,6 +296,56 @@ class TOTPService {
     }
   }
 
+  /**
+   * Verify TOTP code during setup (before DB changes)
+   * @param {string} sessionToken - Temporary setup session token
+   * @param {string} token - The token to verify
+   * @returns {Object} - Verification result
+   */
+  
+
+  async verifySetupTOTP(sessionToken, token) {
+    try {
+      // Get pending setup data WITHOUT removing it
+      const setup = this.getPendingSetup(sessionToken);
+      if (!setup) {
+        log("WARN", "No pending setup found for session token");
+        return { success: false, error: "Setup session expired or invalid" };
+      }
+
+      // Check if setup is too old (optional security measure)
+      const setupAge = Date.now() - setup.timestamp;
+      const maxAge = 10 * 60 * 1000; // 10 minutes
+      if (setupAge > maxAge) {
+        this.pendingSetups.delete(sessionToken); // Remove expired setup
+        log("WARN", "Setup session expired", { age: setupAge });
+        return {
+          success: false,
+          error: "Setup session expired - please start over",
+        };
+      }
+
+      // Verify the code with the temporary secret
+      const verification = await this.verifyTOTPWithSecret(
+        setup.totpSecret,
+        token,
+        null // No userId for setup verification
+      );
+
+      if (!verification.success) {
+        return verification;
+      }
+
+      // Return setup data along with verification result
+      return {
+        success: true,
+        setupData: setup,
+      };
+    } catch (error) {
+      log("ERROR", "Error verifying setup TOTP", { error: error.message });
+      return { success: false, error: "Verification failed" };
+    }
+  }
 
   /**
    * Clear user's recent codes
@@ -366,23 +362,6 @@ class TOTPService {
     log("DEBUG", `Cleared ${keysToDelete.length} codes for user`, { userId });
   }
 
-  /* Clean up old codes (called automatically)  */
-  // cleanupOldCodes() {
-  //   const now = Date.now();
-  //   const ttl = CONFIG.session.replayProtectionTTL;
-  //   let cleanedCount = 0;
-
-  //   for (const [key, timestamp] of this.recentCodes) {
-  //     if (now - timestamp > ttl) {
-  //       this.recentCodes.delete(key);
-  //       cleanedCount++;
-  //     }
-  //   }
-
-  //   if (cleanedCount > 0) {
-  //     log("DEBUG", `Cleaned up ${cleanedCount} old TOTP codes`);
-  //   }
-  // }
 
   cleanupOldCodes() {
     const now = Date.now();
@@ -408,7 +387,10 @@ class TOTPService {
     }
 
     if (cleanedCount > 0 || expiredSetups > 0) {
-      log("DEBUG", `Cleaned up ${cleanedCount} old TOTP codes and ${expiredSetups} expired setups`);
+      log(
+        "DEBUG",
+        `Cleaned up ${cleanedCount} old TOTP codes and ${expiredSetups} expired setups`
+      );
     }
   }
 }
@@ -862,7 +844,7 @@ router.get('/test-db', async (req, res) => {
 });
 
 // =============================================================================
-// AUTHENTICATION ROUTES
+// AUTHENTICATION ROUTE
 // =============================================================================
 
 // User Login - Enhanced with device info in session
@@ -1027,9 +1009,6 @@ router.post("/auth/setup-2fa", async (req, res) => {
 });
 
 // Verify 2FA - Enhanced with device info and session management
-
-
-// Verify 2FA - Creates DB entries only after successful verification
 router.post("/auth/verify-2fa", async (req, res) => {
   try {
     const { sessionToken, totpCode } = req.body;
@@ -1041,35 +1020,43 @@ router.post("/auth/verify-2fa", async (req, res) => {
       });
     }
 
-    // STEP 1: Check if this is a pending setup verification
+    // CASE 1: Check if this is a new 2FA setup verification
     const pendingSetup = totpService.getPendingSetup(sessionToken);
     
     if (pendingSetup) {
       // This is a NEW 2FA setup verification
+      log('INFO', 'Processing NEW 2FA setup verification', { username: pendingSetup.username });
+      
+      // Verify the TOTP code with the temporary secret
+      const verification = await totpService.verifyTOTPWithSecret(
+        pendingSetup.totpSecret,
+        totpCode
+      );
+
+      if (!verification.success) {
+        // DO NOT remove pending setup on failure - allow retry
+        log('WARN', 'TOTP verification failed for new setup', { 
+          username: pendingSetup.username,
+          error: verification.error 
+        });
+        
+        return res.status(401).json({
+          success: false,
+          message: verification.error || "Invalid TOTP code",
+        });
+      }
+
+      // TOTP code is valid - NOW we can modify the database
       await databaseManager.query("BEGIN TRANSACTION");
 
       try {
-        // STEP 2: Verify the TOTP code with the temporary secret
-        const verification = await totpService.verifyTOTPWithSecret(
-          pendingSetup.totpSecret,
-          totpCode
-        );
-
-        if (!verification.success) {
-          await databaseManager.query("ROLLBACK TRANSACTION");
-          return res.status(401).json({
-            success: false,
-            message: verification.error || "Invalid TOTP code",
-          });
-        }
-
-        // STEP 3: Code is valid - NOW create the user and device in DB
+        // Preserve original password before any changes
         const originalPasswordHash = await preserveOriginalPassword(pendingSetup.username);
-        
-        // Create or get 2FA user
+
+        // Create or get 2FA user (only now, after successful verification)
         const user = await createOrGetTwoFactorUser(pendingSetup.username, pendingSetup.password);
 
-        // Clean up old devices if this is first setup
+        // Check if this is first setup
         const existingDevices = await databaseManager.query(
           "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ? AND Inactive IS NULL",
           [user.TwoFactorUserID]
@@ -1078,13 +1065,14 @@ router.post("/auth/verify-2fa", async (req, res) => {
         const isFirstSetup = existingDevices[0].count === 0;
 
         if (isFirstSetup) {
+          // Clean up old inactive devices
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ?",
             [user.TwoFactorUserID]
           );
         }
 
-        // Create the device
+        // Create the device (only now, after successful verification)
         const deviceId = await addTwoFactorDevice(
           user.TwoFactorUserID,
           pendingSetup.deviceInfo,
@@ -1097,25 +1085,19 @@ router.post("/auth/verify-2fa", async (req, res) => {
           [user.TwoFactorUserID]
         );
 
-        // Restore original password
-        await restoreOriginalPassword(pendingSetup.username, originalPasswordHash);
-
         // Create authenticated session
         const newSessionToken = uuidv4();
         const sessionData = {
           username: pendingSetup.username,
           userId: user.TwoFactorUserID,
-          originalPassword: pendingSetup.password,
           originalPasswordHash,
           loginTime: new Date().toISOString(),
           requires2FA: true,
           authenticated2FA: true,
-          authenticationTime: new Date().toISOString(),
           ipAddress: pendingSetup.ipAddress,
           userAgent: pendingSetup.userAgent,
           deviceInfo: pendingSetup.deviceInfo,
           deviceId: deviceId,
-          sessionType: "fully_authenticated"
         };
 
         await databaseManager.query(
@@ -1132,12 +1114,18 @@ router.post("/auth/verify-2fa", async (req, res) => {
         const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
         const dbPassword = activation.success ? activation.data?.DBPassword : null;
 
+        // Restore original password
+        await restoreOriginalPassword(pendingSetup.username, originalPasswordHash);
+
         await databaseManager.query("COMMIT TRANSACTION");
 
-        log('INFO', `2FA setup completed successfully`, { 
+        // NOW remove the pending setup after successful completion
+        totpService.removePendingSetup(sessionToken);
+
+        log("INFO", `2FA setup completed successfully`, {
           username: pendingSetup.username,
           deviceId,
-          isFirstSetup 
+          isFirstSetup,
         });
 
         return res.json({
@@ -1149,27 +1137,22 @@ router.post("/auth/verify-2fa", async (req, res) => {
             id: user.TwoFactorUserID,
             originalPasswordPreserved: true,
           },
-          device: {
-            id: deviceId,
-            deviceInfo: pendingSetup.deviceInfo,
-            authMethod: "TOTP",
-          },
-          fullyAuthenticated: true,
           dbPassword: dbPassword,
-          activation: {
-            success: activation.success,
-            message: activation.message,
-            dbPasswordGenerated: !!dbPassword,
-          },
           isFirstSetup: isFirstSetup,
         });
 
       } catch (error) {
         await databaseManager.query("ROLLBACK TRANSACTION");
+        log("ERROR", "Error during 2FA setup", {
+          error: error.message,
+          stack: error.stack,
+        });
         throw error;
       }
     } else {
-      // This is a regular 2FA verification for existing user
+      // CASE 2: Regular 2FA verification for existing user
+      log('INFO', 'Processing EXISTING 2FA verification');
+      
       const sessionQuery = await databaseManager.query(
         "SELECT * FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
         [sessionToken]
@@ -1194,14 +1177,13 @@ router.post("/auth/verify-2fa", async (req, res) => {
         });
       }
 
-      // Mark session as authenticated
+      // Update session as authenticated
       const updatedSessionData = {
         ...sessionData,
         authenticated2FA: true,
         authenticationTime: new Date().toISOString(),
         deviceId: verificationResult.deviceId,
         verifiedDeviceInfo: verificationResult.deviceInfo,
-        sessionType: "fully_authenticated"
       };
 
       await databaseManager.query(
@@ -1222,7 +1204,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
         await restoreOriginalPassword(username, originalPasswordHash);
       }
 
-      log('INFO', `2FA verification successful`, { username });
+      log('INFO', `Existing 2FA verification successful`, { username });
 
       return res.json({
         success: true,
@@ -1233,20 +1215,15 @@ router.post("/auth/verify-2fa", async (req, res) => {
           id: userId,
           originalPasswordPreserved: true,
         },
-        fullyAuthenticated: true,
         dbPassword: dbPassword,
-        activation: {
-          success: activation.success,
-          message: activation.message,
-          dbPasswordGenerated: !!dbPassword,
-        },
       });
     }
+
   } catch (error) {
-    if (databaseManager.getConnection()) {
+    if (databaseManager.isConnected()) {
       await databaseManager.query("ROLLBACK TRANSACTION");
     }
-    log('ERROR', '2FA verification error', { error: error.message });
+    
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1254,7 +1231,6 @@ router.post("/auth/verify-2fa", async (req, res) => {
     });
   }
 });
-
 
 // Get user status
 router.post("/auth/status", async (req, res) => {
@@ -1431,7 +1407,6 @@ router.post("/auth/disable-2fa", async (req, res) => {
 // =============================================================================
 
 // List user sessions with device info
-
 router.get("/sessions/list/:username", async (req, res) => {
   try {
     const { username } = req.params;
