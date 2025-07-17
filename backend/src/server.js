@@ -28,6 +28,26 @@ class Server {
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
+    this.app.use((err, req, res, next) => {
+    console.log('🔥 PARSING ERROR:', {
+        error: err.message,
+        stack: err.stack,
+        body: req.body,
+        headers: req.headers,
+        method: req.method,
+        url: req.url
+    });
+    
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({
+            success: false,
+            message: 'Invalid JSON in request body',
+            error: err.message
+        });
+    }
+    
+    next(err);
+});
     this.setupErrorHandling();
   }
 
@@ -171,28 +191,7 @@ class Server {
       console.log("⚠️ Routes not mounted - using fallback");
     }
   }
-
-this.app.use((err, req, res, next) => {
-    console.log('🔥 PARSING ERROR:', {
-        error: err.message,
-        stack: err.stack,
-        body: req.body,
-        headers: req.headers,
-        method: req.method,
-        url: req.url
-    });
     
-    if (err.type === 'entity.parse.failed') {
-        return res.status(400).json({
-            success: false,
-            message: 'Invalid JSON in request body',
-            error: err.message
-        });
-    }
-    
-    next(err);
-});
-
 
   setupErrorHandling() {
     console.log("🛡️ Setting up error handling...");
