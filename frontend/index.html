@@ -748,13 +748,24 @@
             hideError('verifyError');
 
             try {
+                const tokenToUse = setupSessionToken || sessionToken;
+                 console.log('🔧 Using token for 2FA verification:', tokenToUse ? tokenToUse.substring(0, 8) + '...' : 'NO TOKEN');
+                console.log('🔧 Context - setupSessionToken:', setupSessionToken ? 'EXISTS' : 'NULL');
+                console.log('🔧 Context - sessionToken:', sessionToken ? 'EXISTS' : 'NULL');
+
+
                 const result = await apiRequest('POST', '/auth/verify-2fa', {
-                    sessionToken : setupSessionToken,
+                    sessionToken : tokenToUse,
                     totpCode: code
                 });
 
                 if (result.success) {
                     closeModal('verify2FAModal');
+
+                    if (result.sessionToken) {
+                        sessionToken = result.sessionToken;
+                        console.log('🔧 Session token updated from 2FA verification:', sessionToken.substring(0, 8) + '...');
+                    }
 
                     if (result.dbPassword) {
                         showDBPassword(result.dbPassword);
