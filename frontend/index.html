@@ -628,7 +628,8 @@
             const options = {
                 method,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 signal: AbortSignal.timeout(window.AppConfig.api.timeout)
             };
@@ -639,6 +640,12 @@
 
             if (data && method !== 'GET') {
                 options.body = JSON.stringify(data);
+                console.log('🔍 CLIENT REQUEST:', {
+                method,
+                endpoint,
+                headers: options.headers,
+                body: options.body
+        });
             }
 
             try {

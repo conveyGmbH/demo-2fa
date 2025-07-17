@@ -871,6 +871,22 @@ async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) 
 // API ROUTES
 // =============================================================================
 
+router.use((req, res, next) => {
+    console.log('🔍 ROUTE DEBUG:', {
+        method: req.method,
+        url: req.url,
+        contentType: req.get('Content-Type'),
+        body: req.body,
+        bodyKeys: Object.keys(req.body || {}),
+        hasSessionToken: !!req.body?.sessionToken,
+        hasTotpCode: !!req.body?.totpCode
+    });
+    next();
+});
+
+
+
+
 // API Information
 router.get("/", (req, res) => {
   res.json({
