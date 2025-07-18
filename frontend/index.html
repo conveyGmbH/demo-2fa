@@ -71,79 +71,150 @@
             height: 20px;
             animation: spin 1s linear infinite;
         }
-
+    
         @keyframes spin {
             0% {
                 transform: rotate(0deg);
             }
-
+    
             100% {
                 transform: rotate(360deg);
             }
         }
-
+    
         @keyframes pulse {
-
+    
             0%,
             100% {
                 opacity: 1;
             }
-
+    
             50% {
                 opacity: 0.5;
             }
         }
-
+    
         .modal-overlay {
             backdrop-filter: blur(4px);
         }
-
+    
         .fade-in {
             animation: fadeIn 0.3s ease-in-out;
         }
-
+    
         @keyframes fadeIn {
             from {
                 opacity: 0;
                 transform: translateY(-10px);
             }
-
+    
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-
+    
         .qr-code-container {
             background: white;
             padding: 16px;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
+        #setup2FAModal .bg-white {
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+    
+        /* Responsive modal */
+        @media (max-height: 700px) {
+            #setup2FAModal .bg-white {
+                max-height: 85vh;
+            }
+    
+            #qrCodeImage,
+            #qrCodeLoading {
+                width: 120px !important;
+                height: 120px !important;
+            }
+        }
+    
+        @media (max-height: 600px) {
+            #setup2FAModal .bg-white {
+                max-height: 80vh;
+            }
+            
+            #qrCodeImage, #qrCodeLoading {
+                width: 120px !important;
+                height: 120px !important;
+            }
+            
+            #setup2FAModal .space-y-4 {
+                gap: 0.5rem;
+            }
+            
+            #setup2FAModal .text-sm {
+                font-size: 0.7rem;
+            }
+            
+            #setup2FAModal input {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.9rem;
+            }
+            
+            #setup2FAModal button {
+                padding: 0.5rem;
+                font-size: 0.8rem;
+            }
+        }
 
+        @media (max-height: 500px) {
+            #setup2FAModal .bg-white {
+                max-height: 95vh;
+            }
+            
+            #qrCodeImage, #qrCodeLoading {
+                width: 100px !important;
+                height: 100px !important;
+            }
+            
+            #setup2FAModal .p-6 {
+                padding: 1rem;
+            }
+            
+            #setup2FAModal .text-lg {
+                font-size: 1rem;
+            }
+            
+            #manualKey {
+                font-size: 0.6rem;
+            }
+        }
+    
+     
+    
         .device-name {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-
+    
         .utf8-support {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
+    
         .error-shake {
             animation: shake 0.5s ease-in-out;
         }
-
+    
         @keyframes shake {
-
+    
             0%,
             100% {
                 transform: translateX(0);
             }
-
+    
             25% {
                 transform: translateX(-5px);
             }
-
+    
             75% {
                 transform: translateX(5px);
             }
@@ -264,6 +335,7 @@
                             </div>
                         </div>
 
+                        <!-- For DEBUG NO DISPLAY -->
                         <div id="dbPasswordDisplay"
                             class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                             <h4 class="text-sm font-semibold text-green-800 mb-2">
@@ -326,7 +398,7 @@
                             <img id="qrCodeImage" src="" alt="QR Code" class="mx-auto max-w-full h-auto"
                                 style="display: none;">
                             <div id="qrCodeLoading"
-                                class="w-48 h-48 mx-auto border rounded bg-gray-100 flex items-center justify-center">
+                                class="w-36 h-36 mx-auto border rounded bg-gray-100 flex items-center justify-center">
                                 <span class="text-gray-500">Loading QR Code...</span>
                             </div>
                         </div>
@@ -345,28 +417,58 @@
                     <div class="text-sm text-gray-600">
                         <p class="font-medium mb-2">Instructions:</p>
                         <ol class="list-decimal pl-4 space-y-1">
-                            <li>Open your authenticator app (Google Authenticator, Authy, etc.)</li>
+                            <li>Open your authenticator app (Google Authenticator, Microsoft AUth, etc.)</li>
                             <li>Scan the QR code above or enter the key manually</li>
                             <li>Enter the 6-digit code from your app below</li>
+                            <li>Enter the device name below</li>
                         </ol>
                     </div>
 
                     <form id="setup2FAForm" class="space-y-4">
+
+                        <!-- Device  Name Input -->
+                         <div>
+                            <label for="deviceName" class="block text-sm font-medium text-gray-700">
+                                Device Name <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="deviceName" 
+                                name="deviceName" 
+                                required
+                                minlength="3"
+                                maxlength="50"
+                                placeholder="e.g., John's iPhone, Work Laptop"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                            >
+                            <p class="mt-1 text-xs text-gray-500">Minimum 3 characters required</p>
+                        </div>
+
+                        <!-- Verification Code Input -->
                         <div>
-                            <label for="setupCode" class="block text-sm font-medium text-gray-700">Verification
-                                Code</label>
-                            <input type="text" id="setupCode" maxlength="6" pattern="[0-9]{6}" required
+                            <label 
+                                for="setupCode" 
+                                class="block text-sm font-medium text-gray-700">Verification  Code
+                            </label>
+                            <input 
+                                type="text" 
+                                id="setupCode" 
+                                maxlength="6" 
+                                pattern="[0-9]{6}" 
+                                required
                                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-center text-lg tracking-widest focus:outline-none focus:ring-primary focus:border-primary"
                                 placeholder="123456">
                         </div>
 
-                        <button type="submit" id="setupBtn"
+
+                        <button disabled type="submit" id="setupBtn" 
                             class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md text-sm font-medium transition-colors">
                             <span id="setupBtnText">Enable 2FA</span>
                             <div id="setupSpinner" class="spinner ml-2 hidden"></div>
                         </button>
                     </form>
 
+                    <!-- Enhanced Error Display -->
                     <div id="setupError" class="hidden bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
                     </div>
                 </div>
@@ -619,6 +721,51 @@
                     }, 100);
                 }
             });
+
+            // Setup 2FA form validation for device name + TOTP code
+            const deviceNameInput = document.getElementById('deviceName');
+            const setupCodeInput = document.getElementById('setupCode');
+            const setupBtn = document.getElementById('setupBtn');
+
+            function validateSetupForm() {
+                const deviceName = deviceNameInput?.value?.trim() || '';
+                const setupCode = setupCodeInput?.value?.trim() || '';
+
+                const isDeviceNameValid = deviceName.length >= 3;
+                const isCodeValid = /^\d{6}$/.test(setupCode);
+                
+                if (setupBtn) {
+                    if (isDeviceNameValid && isCodeValid) {
+                        setupBtn.disabled = false;
+                        setupBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                        setupBtn.classList.add('bg-primary', 'hover:bg-primary-dark');
+                    } else {
+                        setupBtn.disabled = true;
+                        setupBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                        setupBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
+                    }
+                }
+            }
+            // Add validation listeners only if elements exist
+            if (deviceNameInput) {
+                deviceNameInput.addEventListener('input', validateSetupForm);
+                deviceNameInput.addEventListener('blur', validateSetupForm);
+            }
+
+            if (setupCodeInput) {
+                // Remove the auto-submit for setup code since we need both fields
+                setupCodeInput.removeEventListener('input', function (e) {
+                    if (e.target.value.length === 6) {
+                        setTimeout(() => {
+                            document.getElementById('setup2FAForm').dispatchEvent(new Event('submit'));
+                        }, 100);
+                    }
+                });
+
+                // Add validation instead
+                setupCodeInput.addEventListener('input', validateSetupForm);
+            }
+
         }
 
         // API Helper Functions
@@ -818,7 +965,11 @@
                     manualKey.textContent = result.totpSetup.secret;
 
                     hideLoadingModal();
+                    resetSetupModal();
                     showModal('setup2FAModal');
+
+                    //Focus on device name input
+                    document.getElementById('deviceName').focus();
                 }
             } catch (error) {
                 hideLoadingModal();
@@ -826,109 +977,72 @@
             }
         }
 
-        // async function handleSetup2FA(e) {
-        //     e.preventDefault();
 
-        //     const code = document.getElementById('setupCode').value;
+        async function handleSetup2FA(e) {
+            e.preventDefault();
 
-        //     setLoadingState('setupBtn', true);
-        //     hideError('setupError');
-
-        //     try {
-
-        //     console.log('🔧 Using setup session token:', setupSessionToken.substring(0, 8) + '...');
+            const deviceName = document.getElementById('deviceName').value.trim();
+            const code = document.getElementById('setupCode').value;
 
 
-        //         const result = await apiRequest('POST', '/auth/verify-2fa', {
-        //             sessionToken : setupSessionToken,
-        //             totpCode: code
-        //         });
+            // Validate inputs
+            if (deviceName.length < 3) {
+                showError('setupError', 'Device name must be at least 3 characters long');
+                return;
+            }
 
-        //         if (result.success) {
-        //             closeModal('setup2FAModal');
-        //             document.getElementById('setupCode').value = '';
+            if (!/^\d{6}$/.test(code)) {
+                showError('setupError', 'Please enter a valid 6-digit code');
+                return;
+            }
 
+            setLoadingState('setupBtn', true);
+            hideError('setupError');
 
-        //               // ✅ NOUVEAU : Mettre à jour le sessionToken global
-        //     if (result.sessionToken) {
-        //         sessionToken = result.sessionToken;
-        //         console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
-        //     }
+            try {
+                console.log(' Using setup session token:', setupSessionToken.substring(0, 8) + '...');
 
-          
-        //     currentSetupData = null;
-        //     setupSessionToken = null;
-            
-        //     if (result.dbPassword) {
-        //                 showDBPassword(result.dbPassword);
-        //             }
+                const result = await apiRequest('POST', '/auth/verify-2fa', {
+                sessionToken: setupSessionToken,
+                totpCode: code,
+                deviceName: deviceName
+                });
 
-        //             showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
-        //             await loadCurrentUser();
-        //             loadDevices();
-        //         }
-        //     } catch (error) {
-        //         showError('setupError', error.message);
-        //         document.getElementById('setupCode').value = '';
-        //         document.getElementById('setupCode').focus();
-        //     } finally {
-        //         setLoadingState('setupBtn', false);
-        //     }
-        // }
+                if (result.success) {
 
-        // Navigation
-        
-        // Frontend JavaScript updates
+                    closeModal('setup2FAModal');
 
-async function handleSetup2FA(e) {
-  e.preventDefault();
+                    resetSetupModal();
 
-  const code = document.getElementById('setupCode').value;
+                    // Update global session token
+                    if (result.sessionToken) {
+                        
+                        sessionToken = result.sessionToken;
+                        console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
+                    }
 
-  setLoadingState('setupBtn', true);
-  hideError('setupError');
+                currentSetupData = null;
+                setupSessionToken = null;
+                
+                if (result.dbPassword) {
+                    showDBPassword(result.dbPassword);
+                }
 
-  try {
-    console.log('🔧 Using setup session token:', setupSessionToken.substring(0, 8) + '...');
+                // showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
+                showSuccess('2FA Enabled', `Device "${deviceName}" has been successfully added to your account!`);
 
-    const result = await apiRequest('POST', '/auth/verify-2fa', {
-      sessionToken: setupSessionToken,
-      totpCode: code
-    });
+                await loadCurrentUser();
+                loadDevices();
+                }
+            } catch (error) {
+                showError('setupError', error.message);
+                document.getElementById('setupCode').value = '';
+                document.getElementById('setupCode').focus();
+            } finally {
+                setLoadingState('setupBtn', false);
+            }
+        }
 
-    if (result.success) {
-      closeModal('setup2FAModal');
-      document.getElementById('setupCode').value = '';
-
-      // Update global session token
-      if (result.sessionToken) {
-        sessionToken = result.sessionToken;
-        console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
-      }
-
-      currentSetupData = null;
-      setupSessionToken = null;
-      
-      if (result.dbPassword) {
-        showDBPassword(result.dbPassword);
-      }
-
-      showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
-      await loadCurrentUser();
-      loadDevices();
-    }
-  } catch (error) {
-    showError('setupError', error.message);
-    document.getElementById('setupCode').value = '';
-    document.getElementById('setupCode').focus();
-  } finally {
-    setLoadingState('setupBtn', false);
-  }
-}
-        
-        
-        
-        
         function showDashboard(data) {
             document.getElementById('loginContainer').classList.add('hidden');
             document.getElementById('dashboardLayout').classList.remove('hidden');
@@ -1163,6 +1277,7 @@ async function handleSetup2FA(e) {
         }
 
 
+
         // Load Devices
         async function loadDevices() {
 
@@ -1193,7 +1308,6 @@ async function handleSetup2FA(e) {
             }
 
         }
-
 
 
         // confirm Remove Last Device 
@@ -1337,8 +1451,6 @@ async function handleSetup2FA(e) {
             }
         }
 
-
-
         async function addNewDevice() {
             // Request password before setting up 2FA, as setup-2fa API requires it.
             try {
@@ -1349,6 +1461,25 @@ async function handleSetup2FA(e) {
                 console.error("Add new device cancelled or failed:", error);
             }
         }
+
+        // Reset setup modal function
+        function resetSetupModal() {
+            const deviceNameInput = document.getElementById('deviceName');
+            const setupCodeInput = document.getElementById('setupCode');
+            const setupBtn = document.getElementById('setupBtn');
+            
+            if (deviceNameInput) deviceNameInput.value = '';
+            if (setupCodeInput) setupCodeInput.value = '';
+            
+            if (setupBtn) {
+                setupBtn.disabled = true;
+                setupBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                setupBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
+            }
+            
+            hideError('setupError');
+        }
+
 
         // Session management with device info display
         async function loadSessions() {
@@ -1365,13 +1496,25 @@ async function handleSetup2FA(e) {
         function displaySessions(sessions) {
             const sessionsList = document.getElementById('sessionsList');
 
-            if (sessions.length === 0) {
-                sessionsList.innerHTML = '<p class="text-gray-500 text-center py-8">No active sessions</p>';
+            const validSessions = sessions.filter(session => session.authenticated2FA === true);
+
+            console.log("validSessions:", validSessions, ' numbers:', validSessions.length);
+
+            if (validSessions.length === 0) {
+                 sessionsList.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-4xl mb-4">🔐</div>
+                        <p class="text-gray-500 font-medium">No authenticated 2FA sessions found</p>
+                        <p class="text-gray-400 text-sm mt-2">Sessions will appear here after successful 2FA verification</p>
+                    </div>
+                `;
                 return;
             }
 
-            sessionsList.innerHTML = sessions.map((session, index) => {
+            sessionsList.innerHTML = validSessions.map((session, index) => {
                 const deviceIcon = getDeviceIcon(session.deviceInfo || 'Unknown Device');
+                const isCurrentSession = sessionToken && session.sessionToken.startsWith(sessionToken.substring(0, 8));
+
 
                 return `
                     <div class="p-4 border rounded-lg mb-3 ${index === 0 ? 'border-primary bg-primary/5' : ''}">
@@ -1387,7 +1530,10 @@ async function handleSetup2FA(e) {
                                         <div>Device: ${session.deviceInfo || 'Unknown Device'}</div>
                                         <div>Started: ${session.loginTime ? new Date(session.loginTime).toLocaleString() : 'Unknown'}</div>
                                         <div>Last activity: ${session.lastUsed ? new Date(session.lastUsed).toLocaleString() : 'Unknown'}</div>
-                                        <div>2FA: ${session.authenticated2FA ? '✅ Verified' : '❌ Not verified'}</div>
+                                        <div class="flex items-center">
+                                            <span class="text-green-600">✅ 2FA Verified</span>
+                                            ${session.deviceStatus ? `<span class="ml-2 text-xs text-gray-400">(${session.deviceStatus})</span>` : ''}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1429,8 +1575,10 @@ async function handleSetup2FA(e) {
 
         // Utility functions
         function showDBPassword(password) {
-            document.getElementById('dbPasswordValue').textContent = password;
-            document.getElementById('dbPasswordDisplay').classList.remove('hidden');
+            // show the password in the display area
+            // document.getElementById('dbPasswordValue').textContent = password;
+            // document.getElementById('dbPasswordDisplay').classList.remove('hidden');
+                console.log('DB Password generation skipped');
         }
 
         function copyDBPassword() {
@@ -1567,12 +1715,7 @@ async function handleSetup2FA(e) {
         window.copyManualKey = copyManualKey;
         window.closeModal = closeModal;
     </script>
+
 </body>
 
-</html>< ! - -   U p d a t e d   0 7 / 1 6 / 2 0 2 5   0 6 : 3 2 : 2 6   - - > 
- 
- < ! - -   T o k e n   u p d a t e d   0 7 / 1 6 / 2 0 2 5   0 6 : 5 7 : 5 5   - - > 
- 
- < ! - -   T o k e n   u p d a t e d   0 7 / 1 6 / 2 0 2 5   0 7 : 0 7 : 2 9   - - > 
- 
- 
+</html>
