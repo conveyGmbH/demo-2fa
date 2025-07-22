@@ -1,4 +1,4 @@
-// Backend/src/routes/index.js 
+// Backend/src/routes/index.js
 const express = require("express");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
@@ -19,16 +19,16 @@ const CONFIG = {
     step: 30,
     window: 2,
     algorithm: "sha1",
-    secretLength: 32
+    secretLength: 32,
   },
   session: {
     replayProtectionTTL: 5 * 60 * 1000, // 5 minutes
-    cleanupInterval: 60000 // 1 minute
+    cleanupInterval: 60000, // 1 minute
   },
   logging: {
     enabled: true,
-    sensitive: false // Set to true in production to mask sensitive data
-  }
+    sensitive: false, // Set to true in production to mask sensitive data
+  },
 };
 
 // =============================================================================
@@ -43,21 +43,21 @@ const CONFIG = {
  */
 function log(level, message, data = null) {
   if (!CONFIG.logging.enabled) return;
-  
+
   const timestamp = new Date().toISOString();
   const prefix = {
-    'INFO': '✅',
-    'WARN': '⚠️',
-    'ERROR': '❌',
-    'DEBUG': '🔍'
-  }[level] || '📝';
-  
+      INFO: "",
+      WARN: "⚠️",
+      ERROR: "❌",
+      DEBUG: "🔍",
+    }[level] || "📝";
+
   const logMessage = `[${timestamp}] ${prefix} ${level}: ${message}`;
-  
+
   if (data) {
     // Mask sensitive data in production
     if (!CONFIG.logging.sensitive && data.password) {
-      data = { ...data, password: '***REDACTED***' };
+      data = { ...data, password: "***REDACTED***" };
     }
     if (!CONFIG.logging.sensitive && data.secret) {
       data = { ...data, secret: maskSensitiveData(data.secret) };
@@ -227,18 +227,15 @@ class TOTPService {
    * @param {string} token - The token to verify
    * @returns {Object} - Verification result
    */
-  
-
-
 
   async verifyTOTP(userId, token) {
     try {
-      // 
+      //
       const userIdInt = parseInt(userId);
       if (isNaN(userIdInt)) {
-        log('ERROR', 'Invalid userId - not a number', { 
-          userId, 
-          type: typeof userId 
+        log("ERROR", "Invalid userId - not a number", {
+          userId,
+          type: typeof userId,
         });
         return { success: false, deviceId: null };
       }
@@ -263,18 +260,20 @@ class TOTPService {
         `SELECT TwoFactorDeviceID, SecretData, DeviceInfo
         FROM appblddbo.TwoFactorDevice 
         WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
-        [userIdInt] 
+        [userIdInt]
       );
 
       // DEBUG: Display alls device found
       log("DEBUG", "TOTP verification - devices found", {
         userId: userIdInt,
         deviceCount: devices.length,
-        devices: devices.map(d => ({
+        devices: devices.map((d) => ({
           id: d.TwoFactorDeviceID,
           info: d.DeviceInfo,
-          secretPreview: d.SecretData ? d.SecretData.substring(0, 4) + "..." : "NO_SECRET"
-        }))
+          secretPreview: d.SecretData
+            ? d.SecretData.substring(0, 4) + "..."
+            : "NO_SECRET",
+        })),
       });
 
       if (devices.length === 0) {
@@ -288,7 +287,7 @@ class TOTPService {
           deviceId: device.TwoFactorDeviceID,
           deviceInfo: device.DeviceInfo,
           secretLength: device.SecretData ? device.SecretData.length : 0,
-          token: token.substring(0, 2) + "****"
+          token: token.substring(0, 2) + "****",
         });
 
         const verified = speakeasy.totp.verify({
@@ -304,7 +303,7 @@ class TOTPService {
         log("DEBUG", "TOTP verification result", {
           deviceId: device.TwoFactorDeviceID,
           verified: verified,
-          secretPreview: device.SecretData.substring(0, 4) + "..."
+          secretPreview: device.SecretData.substring(0, 4) + "...",
         });
 
         if (verified) {
@@ -326,17 +325,17 @@ class TOTPService {
       log("WARN", "TOTP verification failed for all devices", {
         userId: userIdInt,
         devicesChecked: devices.length,
-        testedDevices: devices.map(d => ({
+        testedDevices: devices.map((d) => ({
           id: d.TwoFactorDeviceID,
-          info: d.DeviceInfo
-        }))
+          info: d.DeviceInfo,
+        })),
       });
 
       return { success: false, deviceId: null };
     } catch (error) {
-      log("ERROR", "Error verifying TOTP", { 
-        userId: parseInt(userId), 
-        error: error.message 
+      log("ERROR", "Error verifying TOTP", {
+        userId: parseInt(userId),
+        error: error.message,
       });
       return { success: false, deviceId: null };
     }
@@ -348,7 +347,6 @@ class TOTPService {
    * @param {string} token - The token to verify
    * @returns {Object} - Verification result
    */
-  
 
   async verifySetupTOTP(sessionToken, token) {
     try {
@@ -408,7 +406,6 @@ class TOTPService {
     log("DEBUG", `Cleared ${keysToDelete.length} codes for user`, { userId });
   }
 
-
   cleanupOldCodes() {
     const now = Date.now();
     const ttl = CONFIG.session.replayProtectionTTL;
@@ -450,10 +447,12 @@ class TOTPService {
 
 async function cleanupSessionsForDevice(username, deviceId) {
   try {
-
     const deviceIdInt = parseInt(deviceId);
     if (isNaN(deviceIdInt)) {
-      log('ERROR', 'Invalid deviceId for cleanup', { deviceId, type: typeof deviceId });
+      log("ERROR", "Invalid deviceId for cleanup", {
+        deviceId,
+        type: typeof deviceId,
+      });
       return 0;
     }
 
@@ -467,7 +466,7 @@ async function cleanupSessionsForDevice(username, deviceId) {
     for (const session of sessions) {
       try {
         const sessionData = JSON.parse(session.SessionInfo);
-  
+
         if (parseInt(sessionData.deviceId) === deviceIdInt) {
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
@@ -476,25 +475,27 @@ async function cleanupSessionsForDevice(username, deviceId) {
           cleanedCount++;
         }
       } catch (parseError) {
-        log('WARN', `Could not parse session info for cleanup: ${session.SessionToken.substring(0, 8)}...`);
+        log(
+          "WARN",
+          `Could not parse session info for cleanup: ${session.SessionToken.substring(
+            0,
+            8
+          )}...`
+        );
       }
     }
 
-    log('INFO', `Cleaned ${cleanedCount} sessions for device ${deviceIdInt}`);
+    log("INFO", `Cleaned ${cleanedCount} sessions for device ${deviceIdInt}`);
     return cleanedCount;
   } catch (error) {
-    log('ERROR', 'Error cleaning sessions for device', { 
-      username, 
-      deviceId: parseInt(deviceId), 
-      error: error.message 
+    log("ERROR", "Error cleaning sessions for device", {
+      username,
+      deviceId: parseInt(deviceId),
+      error: error.message,
     });
     throw error;
   }
 }
-
-
-
-
 
 const totpService = new TOTPService();
 
@@ -517,12 +518,17 @@ async function verifyPasswordEnhanced(user) {
     const authResult = result[0];
     return {
       success: authResult.ResultCode === 0,
-      passwordType: authResult.DBPassword ? "login_password" : "global_password",
+      passwordType: authResult.DBPassword
+        ? "login_password"
+        : "global_password",
       message: authResult.ResultMessage,
       dbPassword: authResult.DBPassword,
     };
   } catch (error) {
-    log('ERROR', 'Password verification error', { username: user.username, error: error.message });
+    log("ERROR", "Password verification error", {
+      username: user.username,
+      error: error.message,
+    });
     return { success: false, message: "Password verification failed" };
   }
 }
@@ -541,13 +547,16 @@ async function preserveOriginalPassword(username) {
 
     if (result.length > 0) {
       const originalHash = result[0].Password;
-      log('INFO', `Original password preserved for user: ${username}`);
+      log("INFO", `Original password preserved for user: ${username}`);
       return originalHash;
     }
 
     throw new Error("User not found in Mitarbeiter table");
   } catch (error) {
-    log('ERROR', 'Error preserving password', { username, error: error.message });
+    log("ERROR", "Error preserving password", {
+      username,
+      error: error.message,
+    });
     throw error;
   }
 }
@@ -565,10 +574,13 @@ async function restoreOriginalPassword(username, originalPasswordHash) {
       [originalPasswordHash, username]
     );
 
-    log('INFO', `Original password restored for user: ${username}`);
+    log("INFO", `Original password restored for user: ${username}`);
     return true;
   } catch (error) {
-    log('ERROR', 'Error restoring password', { username, error: error.message });
+    log("ERROR", "Error restoring password", {
+      username,
+      error: error.message,
+    });
     return false;
   }
 }
@@ -588,7 +600,7 @@ async function createOrGetTwoFactorUser(username, password) {
     );
 
     if (existingUser.length > 0) {
-      log('INFO', `Existing 2FA user found: ${username}`);
+      log("INFO", `Existing 2FA user found: ${username}`);
       return existingUser[0];
     }
 
@@ -604,13 +616,16 @@ async function createOrGetTwoFactorUser(username, password) {
     );
 
     if (newUser.length === 1) {
-      log('INFO', `New 2FA user created: ${username}`);
+      log("INFO", `New 2FA user created: ${username}`);
       return newUser[0];
     } else {
       throw new Error("User creation unsuccessful");
     }
   } catch (error) {
-    log('ERROR', 'Error creating/getting 2FA user', { username, error: error.message });
+    log("ERROR", "Error creating/getting 2FA user", {
+      username,
+      error: error.message,
+    });
     throw error;
   }
 }
@@ -624,7 +639,6 @@ async function createOrGetTwoFactorUser(username, password) {
  */
 async function addTwoFactorDevice(userId, deviceInfo, secret) {
   try {
-   
     const userIdInt = parseInt(userId);
     if (isNaN(userIdInt)) {
       throw new Error(`Invalid userId: ${userId} is not a number`);
@@ -638,23 +652,27 @@ async function addTwoFactorDevice(userId, deviceInfo, secret) {
 
     const deviceQuery = await databaseManager.query(
       "SELECT TwoFactorDeviceID FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ? AND SecretData = ?",
-      [userIdInt, secret] 
+      [userIdInt, secret]
     );
 
     if (deviceQuery.length > 0) {
-      log('INFO', `New device created with ID: ${deviceQuery[0].TwoFactorDeviceID}`, { 
-        deviceInfo,
-        userId: userIdInt 
-      });
+      log(
+        "INFO",
+        `New device created with ID: ${deviceQuery[0].TwoFactorDeviceID}`,
+        {
+          deviceInfo,
+          userId: userIdInt,
+        }
+      );
       return deviceQuery[0].TwoFactorDeviceID;
     } else {
       throw new Error("Device creation failed");
     }
   } catch (error) {
-    log('ERROR', 'Error adding device', { 
-      userId: parseInt(userId), 
-      deviceInfo, 
-      error: error.message 
+    log("ERROR", "Error adding device", {
+      userId: parseInt(userId),
+      deviceInfo,
+      error: error.message,
     });
     throw error;
   }
@@ -698,29 +716,41 @@ function maskSensitiveData(data) {
 
 function detectDeviceFromUserAgent(userAgent, fallback = "Unknown Device") {
   if (!userAgent) return fallback;
-  
-  const ua = userAgent.toLowerCase();
-  
-  const browserVersionMatch = ua.match(/(chrome|firefox|safari|edge|opera)[\/\s]([\d.]+)/i);
-  const osMatch = ua.match(/(windows nt|mac os x|linux|android|ios) ([^;)]+)/i);
-  
-  const browserName = 
-    ua.includes('chrome') ? 'Chrome' :
-    ua.includes('firefox') ? 'Firefox' : 
-    ua.includes('safari') ? 'Safari' : 
-    ua.includes('edge') ? 'Edge' : 'Browser';
-  
-  const osName = 
-    ua.includes('windows') ? 'Windows' :
-    ua.includes('mac') ? 'macOS' :
-    ua.includes('linux') ? 'Linux' :
-    ua.includes('android') ? 'Android' :
-    ua.includes('ios') ? 'iOS' : 'Unknown OS';
 
-  
+  const ua = userAgent.toLowerCase();
+
+  const browserVersionMatch = ua.match(
+    /(chrome|firefox|safari|edge|opera)[\/\s]([\d.]+)/i
+  );
+  const osMatch = ua.match(/(windows nt|mac os x|linux|android|ios) ([^;)]+)/i);
+
+  const browserName = ua.includes("chrome")
+    ? "Chrome"
+    : ua.includes("firefox")
+    ? "Firefox"
+    : ua.includes("safari")
+    ? "Safari"
+    : ua.includes("edge")
+    ? "Edge"
+    : "Browser";
+
+  const osName = ua.includes("windows")
+    ? "Windows"
+    : ua.includes("mac")
+    ? "macOS"
+    : ua.includes("linux")
+    ? "Linux"
+    : ua.includes("android")
+    ? "Android"
+    : ua.includes("ios")
+    ? "iOS"
+    : "Unknown OS";
+
   const uniqueId = Math.random().toString(36).substring(2, 6).toUpperCase();
-  
-  return `${browserName} ${browserVersionMatch?.[2] || ''} on ${osName} ${osMatch?.[2] || ''} (${uniqueId})`;
+
+  return `${browserName} ${browserVersionMatch?.[2] || ""} on ${osName} ${
+    osMatch?.[2] || ""
+  } (${uniqueId})`;
 }
 
 /**
@@ -729,7 +759,11 @@ function detectDeviceFromUserAgent(userAgent, fallback = "Unknown Device") {
  * @param {string} oldDeviceInfo - Old device name
  * @param {string} newDeviceInfo - New device name
  */
-async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) {
+async function updateSessionsDeviceInfo(
+  username,
+  oldDeviceInfo,
+  newDeviceInfo
+) {
   try {
     const sessions = await databaseManager.query(
       "SELECT SessionToken, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
@@ -741,7 +775,7 @@ async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) 
     for (const session of sessions) {
       try {
         const sessionData = JSON.parse(session.SessionInfo);
-        
+
         if (sessionData.deviceInfo === oldDeviceInfo) {
           sessionData.deviceInfo = newDeviceInfo;
           const updatedSessionInfo = JSON.stringify(sessionData);
@@ -750,18 +784,31 @@ async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) 
             "UPDATE appblddbo.TwoFactorSession SET SessionInfo = ? WHERE SessionToken = ?",
             [updatedSessionInfo, session.SessionToken]
           );
-          
+
           updatedCount++;
         }
       } catch (parseError) {
-        log('WARN', `Could not parse session info for token: ${session.SessionToken.substring(0, 8)}...`);
+        log(
+          "WARN",
+          `Could not parse session info for token: ${session.SessionToken.substring(
+            0,
+            8
+          )}...`
+        );
       }
     }
 
-    log('INFO', `Updated device info in ${updatedCount} sessions`, { username, oldDeviceInfo, newDeviceInfo });
+    log("INFO", `Updated device info in ${updatedCount} sessions`, {
+      username,
+      oldDeviceInfo,
+      newDeviceInfo,
+    });
     return updatedCount;
   } catch (error) {
-    log('ERROR', 'Error updating sessions device info', { username, error: error.message });
+    log("ERROR", "Error updating sessions device info", {
+      username,
+      error: error.message,
+    });
     throw error;
   }
 }
@@ -771,16 +818,16 @@ async function updateSessionsDeviceInfo(username, oldDeviceInfo, newDeviceInfo) 
 // =============================================================================
 
 router.use((req, res, next) => {
-    console.log('🔍 ROUTE DEBUG:', {
-        method: req.method,
-        url: req.url,
-        contentType: req.get('Content-Type'),
-        body: req.body,
-        bodyKeys: Object.keys(req.body || {}),
-        hasSessionToken: !!req.body?.sessionToken,
-        hasTotpCode: !!req.body?.totpCode
-    });
-    next();
+  console.log("🔍 ROUTE DEBUG:", {
+    method: req.method,
+    url: req.url,
+    contentType: req.get("Content-Type"),
+    body: req.body,
+    bodyKeys: Object.keys(req.body || {}),
+    hasSessionToken: !!req.body?.sessionToken,
+    hasTotpCode: !!req.body?.totpCode,
+  });
+  next();
 });
 
 // API Information
@@ -840,7 +887,7 @@ router.get("/health", async (req, res) => {
       },
     });
   } catch (error) {
-    log('ERROR', 'Health check error', { error: error.message });
+    log("ERROR", "Health check error", { error: error.message });
     res.status(503).json({
       success: false,
       message: "Health check failed",
@@ -879,7 +926,9 @@ router.get("/tables", async (req, res) => {
           data: users.map((user) => ({
             ...user,
             LoginPassword: user.LoginPassword ? "HASH_STORED" : null,
-            DBPassword: user.DBPassword ? maskSensitiveData(user.DBPassword) : null,
+            DBPassword: user.DBPassword
+              ? maskSensitiveData(user.DBPassword)
+              : null,
           })),
         },
         devices: {
@@ -890,13 +939,15 @@ router.get("/tables", async (req, res) => {
           count: sessions.length,
           data: sessions.map((session) => ({
             ...session,
-            SessionToken: session.SessionToken ? session.SessionToken.substring(0, 8) + "..." : null,
+            SessionToken: session.SessionToken
+              ? session.SessionToken.substring(0, 8) + "..."
+              : null,
           })),
         },
       },
     });
   } catch (error) {
-    log('ERROR', 'Error getting tables', { error: error.message });
+    log("ERROR", "Error getting tables", { error: error.message });
     res.status(500).json({
       success: false,
       message: "Error getting database tables",
@@ -906,33 +957,33 @@ router.get("/tables", async (req, res) => {
 });
 
 // Database test endpoint
-router.get('/test-db', async (req, res) => {
-    try {
-        console.log('🗃️ Database test requested');
-        const result = await databaseManager.query('SELECT 1 as test');
-        
-        res.json({
-            success: true,
-            message: 'Database test successful',
-            result: result,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error('❌ Database test error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Database test failed',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
+router.get("/test-db", async (req, res) => {
+  try {
+    console.log("🗃️ Database test requested");
+    const result = await databaseManager.query("SELECT 1 as test");
+
+    res.json({
+      success: true,
+      message: "Database test successful",
+      result: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Database test error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Database test failed",
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // =============================================================================
 // AUTHENTICATION ROUTE
 // =============================================================================
 
-// User Login - Enhanced with device info in session
+// ROUTE /auth/login 
 router.post("/auth/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -944,82 +995,136 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
-    await databaseManager.query("BEGIN TRANSACTION");
+    log("INFO", `Login attempt for user: ${username}`);
 
-    // Verify password
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
-
-    if (!isValidPassword.success) {
-      await databaseManager.query("ROLLBACK TRANSACTION");
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
-
-    // Preserve original password BEFORE any operations
-    const originalPasswordHash = await preserveOriginalPassword(username);
-
-    // Check 2FA status
     const userQuery = await databaseManager.query(
-      "SELECT * FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+      "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
     );
 
-    const requires2FA = userQuery.length > 0 && !userQuery[0].Disable2FA;
+    const has2FARecord = userQuery.length > 0;
+    const is2FAEnabled = has2FARecord && !userQuery[0].Disable2FA;
 
-    let userIdInt = null;
-    if (userQuery.length > 0) {
-      userIdInt = parseInt(userQuery[0].TwoFactorUserID);
-      if (isNaN(userIdInt)) {
-        await databaseManager.query("ROLLBACK TRANSACTION");
-        throw new Error(`Invalid TwoFactorUserID: ${userQuery[0].TwoFactorUserID}`);
-      }
-    }
-
-    // Detect device info from user agent
-    const deviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser");
-
-    // Create session with device info
-    const sessionToken = uuidv4();
-    const sessionData = {
-      username,
-      userId: userIdInt, 
-      originalPassword: password,
-      originalPasswordHash,
-      loginTime: new Date().toISOString(),
-      requires2FA,
-      ipAddress: req.ip,
-      userAgent: req.get("User-Agent"),
-      deviceInfo: deviceInfo,
-      deviceId: null,
-      sessionType: requires2FA ? "pending_2fa" : "authenticated",
-    };
-
-    await databaseManager.query(
-      "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
-      [sessionToken, username, JSON.stringify(sessionData)]
+    log("INFO",
+      `User 2FA status - HasRecord: ${has2FARecord}, Enabled: ${is2FAEnabled}`
     );
 
-    await databaseManager.query("COMMIT TRANSACTION");
+    if (has2FARecord && is2FAEnabled) {
+      log("INFO", `Processing 2FA-enabled user: ${username}`);
 
-    log('INFO', `Login successful`, { username, requires2FA, deviceInfo, userId: userIdInt });
+      await databaseManager.query("BEGIN TRANSACTION");
 
-    res.json({
-      success: true,
-      message: "Login successful",
-      sessionToken,
-      user: {
-        username,
-        id: userIdInt,
-        requires2FA,
-        originalPasswordPreserved: true,
-      },
-      nextStep: requires2FA ? "verify_2fa" : "authenticated",
-    });
+      try {
+        const isValidPassword = await verifyPasswordEnhanced({
+          username,
+          password,
+        });
+
+        if (!isValidPassword.success) {
+          await databaseManager.query("ROLLBACK TRANSACTION");
+          log("WARN", `Invalid password for 2FA user: ${username}`);
+          return res.status(401).json({
+            success: false,
+            message: "Invalid credentials",
+          });
+        }
+        const originalPasswordHash = await preserveOriginalPassword(username);
+
+        const userIdInt = parseInt(userQuery[0].TwoFactorUserID);
+        if (isNaN(userIdInt)) {
+          await databaseManager.query("ROLLBACK TRANSACTION");
+          throw new Error(
+            `Invalid TwoFactorUserID: ${userQuery[0].TwoFactorUserID}`
+          );
+        }
+
+        const deviceInfo = detectDeviceFromUserAgent(
+          req.get("User-Agent"),
+          "Web Browser"
+        );
+
+        const sessionToken = uuidv4();
+        const sessionData = {
+          username,
+          userId: userIdInt,
+          originalPassword: password, 
+          originalPasswordHash,
+          loginTime: new Date().toISOString(),
+          requires2FA: true,
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent"),
+          deviceInfo: deviceInfo,
+          deviceId: null,
+          sessionType: "pending_2fa",
+        };
+
+        await databaseManager.query(
+          "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+          [sessionToken, username, JSON.stringify(sessionData)]
+        );
+
+        await databaseManager.query("COMMIT TRANSACTION");
+
+        log("INFO", `2FA session created for user: ${username}`);
+
+        return res.json({
+          success: true,
+          message: "User has 2FA enabled - verification required",
+          sessionToken,
+          user: {
+            username,
+            id: userIdInt,
+            requires2FA: true,
+            originalPasswordPreserved: true,
+          },
+          nextStep: "verify_2fa",
+          
+          d: {
+            ODataLocation: "odata_online",
+            requires2FA: true,
+            HasTwoFactor: true,
+            sessionToken,
+            SessionToken: sessionToken,
+            InactiveFlag: false,
+          },
+        });
+      } catch (error) {
+        await databaseManager.query("ROLLBACK TRANSACTION");
+        throw error;
+      }
+    } else if (has2FARecord && !is2FAEnabled) {
+      log("INFO", `User has 2FA disabled: ${username}`);
+      return res.json({
+        success: true,
+        message: "User has 2FA disabled - use standard login",
+        d: {
+          ODataLocation: "odata_online",
+          requires2FA: false,
+          HasTwoFactor: false,
+          InactiveFlag: false,
+        },
+      });
+    } else {
+      log("INFO", `User not in 2FA system: ${username}`);
+      return res.json({
+        success: false,
+        message: "Use standard login endpoint for non-2FA users",
+        d: {
+          ODataLocation: "odata_online",
+          requires2FA: false,
+          HasTwoFactor: false,
+          InactiveFlag: false,
+        },
+      });
+    }
   } catch (error) {
-    await databaseManager.query("ROLLBACK TRANSACTION");
-    log('ERROR', 'Login error', { username: req.body.username, error: error.message });
+    if (databaseManager.isConnected()) {
+      await databaseManager.query("ROLLBACK TRANSACTION");
+    }
+    log("ERROR", "Login error", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1027,7 +1132,6 @@ router.post("/auth/login", async (req, res) => {
     });
   }
 });
-
 
 // Setup 2FA - Enhanced with proper cleanup
 router.post("/auth/setup-2fa", async (req, res) => {
@@ -1042,7 +1146,10 @@ router.post("/auth/setup-2fa", async (req, res) => {
     }
 
     // STEP 1: Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       return res.status(401).json({
         success: false,
@@ -1054,7 +1161,10 @@ router.post("/auth/setup-2fa", async (req, res) => {
     const totpData = await totpService.generateTOTP(username);
 
     // STEP 3: Enhanced device info detection
-    const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
+    const enhancedDeviceInfo = detectDeviceFromUserAgent(
+      req.get("User-Agent"),
+      deviceInfo
+    );
 
     // STEP 4: Create temporary session token for this setup
     const sessionToken = uuidv4();
@@ -1071,7 +1181,10 @@ router.post("/auth/setup-2fa", async (req, res) => {
 
     totpService.storePendingSetup(sessionToken, setupData);
 
-    log('INFO', `2FA setup initiated (QR code generated)`, { username, deviceInfo: enhancedDeviceInfo });
+    log("INFO", `2FA setup initiated (QR code generated)`, {
+      username,
+      deviceInfo: enhancedDeviceInfo,
+    });
 
     // STEP 6: Return QR code and session token for verification
     res.status(200).json({
@@ -1090,10 +1203,13 @@ router.post("/auth/setup-2fa", async (req, res) => {
         "3. Enter the 6-digit code below to verify",
         "4. Device will be added to your account only after successful verification",
       ],
-      note: "No database changes made yet - verification required"
+      note: "No database changes made yet - verification required",
     });
   } catch (error) {
-    log('ERROR', '2FA setup error', { username: req.body.username, error: error.message });
+    log("ERROR", "2FA setup error", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1102,114 +1218,109 @@ router.post("/auth/setup-2fa", async (req, res) => {
   }
 });
 
+
 // Verify 2FA - Enhanced with device info and session management
 router.post("/auth/verify-2fa", async (req, res) => {
   try {
-    const { sessionToken, totpCode } = req.body;
+    const { sessionToken, totpCode, username } = req.body;
 
-    if (!sessionToken || !totpCode) {
+    if (!totpCode) {
       return res.status(400).json({
         success: false,
-        message: "Session token and TOTP code required",
+        message: "TOTP code required",
       });
     }
 
-    // Check if this is a new 2FA setup verification
-    const pendingSetup = totpService.getPendingSetup(sessionToken);
-    
+    // Check if this is a new 2FA setup verification with sessionToken
+    const pendingSetup = sessionToken ? totpService.getPendingSetup(sessionToken) : null;
+
     if (pendingSetup) {
-  
-      log('INFO', 'Processing NEW 2FA setup verification', { username: pendingSetup.username });
+      log("INFO", "Processing NEW 2FA setup verification", {
+        username: pendingSetup.username,
+      });
 
-      //Handle custom device name
       const { deviceName } = req.body;
-
       if (deviceName) {
-
-          const trimmedDeviceName = deviceName.trim();
-
-          if (trimmedDeviceName.length < 3 || trimmedDeviceName.length > 50) {
-              return res.status(400).json({
-                  success: false,
-                  message: "Device name must be between 3 and 50 characters",
-              });
-          }
-
-          // Update pending setup with custom device name
-          pendingSetup.deviceInfo = trimmedDeviceName;
-          log('INFO', `Custom device name provided: ${trimmedDeviceName}`);
+        const trimmedDeviceName = deviceName.trim();
+        if (trimmedDeviceName.length < 3 || trimmedDeviceName.length > 50) {
+          return res.status(400).json({
+            success: false,
+            message: "Device name must be between 3 and 50 characters",
+          });
+        }
+        pendingSetup.deviceInfo = trimmedDeviceName;
+        log("INFO", `Custom device name provided: ${trimmedDeviceName}`);
       }
 
-      
-      // Verify the TOTP code with the temporary secret
       const verification = await totpService.verifyTOTPWithSecret(
         pendingSetup.totpSecret,
         totpCode
       );
 
       if (!verification.success) {
-        log('WARN', 'TOTP verification failed for new setup', { 
+        log("WARN", "TOTP verification failed for new setup", {
           username: pendingSetup.username,
-          error: verification.error 
+          error: verification.error,
         });
-        
         return res.status(401).json({
           success: false,
           message: verification.error || "Invalid TOTP code",
         });
       }
 
-      // TOTP code is valid - now we can modify the database
       await databaseManager.query("BEGIN TRANSACTION");
-
       try {
-        // Preserve original password before any changes
-        const originalPasswordHash = await preserveOriginalPassword(pendingSetup.username);
+        const user = await createOrGetTwoFactorUser(
+          pendingSetup.username,
+          pendingSetup.password
+        );
 
-        // Create or get 2FA user (only now, after successful verification)
-        const user = await createOrGetTwoFactorUser(pendingSetup.username, pendingSetup.password);
-
-        // Convesion in Int
         const userIdInt = parseInt(user.TwoFactorUserID);
         if (isNaN(userIdInt)) {
           throw new Error(`Invalid TwoFactorUserID: ${user.TwoFactorUserID}`);
         }
 
-        // Check if this is first setup
         const existingDevices = await databaseManager.query(
           "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
-          [userIdInt] 
+          [userIdInt]
         );
 
         const isFirstSetup = existingDevices[0].count === 0;
-
         if (isFirstSetup) {
-          // Clean up old inactive devices
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ?",
-            [userIdInt] 
+            [userIdInt]
           );
         }
 
-        // Create the device (only now, after successful verification)
         const deviceId = await addTwoFactorDevice(
-          userIdInt, 
+          userIdInt,
           pendingSetup.deviceInfo,
           pendingSetup.totpSecret
         );
 
-        // Enable 2FA
         await databaseManager.query(
           "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 0 WHERE TwoFactorUserID = ?",
-          [userIdInt] 
+          [userIdInt]
         );
 
-        // Create authenticated session
+        const dbPasswordResult = await databaseManager.query(
+          "SELECT REPLACE(BASE64_ENCODE(HEXTOBIN(REPLACE(NEWID(), '-', ''))), '=', '') as DBPassword"
+        );
+
+        const dbPassword = dbPasswordResult[0]?.DBPassword;
+        if (dbPassword) {
+          await databaseManager.query(
+            "UPDATE appblddbo.TwoFactorUser SET DBPassword = ?, ValidUntilUTC = SECONDS(CAST(CURRENT UTC TIMESTAMP AS TIMESTAMP), 86400) WHERE TwoFactorUserID = ?",
+            [dbPassword, userIdInt]
+          );
+        }
+
         const newSessionToken = uuidv4();
         const sessionData = {
           username: pendingSetup.username,
           userId: userIdInt,
-          originalPasswordHash,
+          originalPasswordHash: null,
           loginTime: new Date().toISOString(),
           requires2FA: true,
           authenticated2FA: true,
@@ -1224,24 +1335,10 @@ router.post("/auth/verify-2fa", async (req, res) => {
           [newSessionToken, pendingSetup.username, JSON.stringify(sessionData)]
         );
 
-        // Activate 2FA and generate DB password
-        const activationResult = await databaseManager.query(
-          "SELECT * FROM appblddbo.PRC_ActivateTwoFactor(?)",
-          [pendingSetup.username]
-        );
-
-        const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
-        const dbPassword = activation.success ? activation.data?.DBPassword : null;
-
-        // Restore original password
-        await restoreOriginalPassword(pendingSetup.username, originalPasswordHash);
-
         await databaseManager.query("COMMIT TRANSACTION");
-
-        // NOW remove the pending setup after successful completion
         totpService.removePendingSetup(sessionToken);
 
-        log("INFO", `2FA setup completed successfully`, {
+        log("INFO", `2FA setup completed successfully - original password UNCHANGED`, {
           username: pendingSetup.username,
           deviceId,
           isFirstSetup,
@@ -1258,8 +1355,8 @@ router.post("/auth/verify-2fa", async (req, res) => {
           },
           dbPassword: dbPassword,
           isFirstSetup: isFirstSetup,
+          note: "Original password unchanged - you can login with your original password",
         });
-
       } catch (error) {
         await databaseManager.query("ROLLBACK TRANSACTION");
         log("ERROR", "Error during 2FA setup", {
@@ -1269,12 +1366,38 @@ router.post("/auth/verify-2fa", async (req, res) => {
         throw error;
       }
     } else {
-      // CASE 2: Regular 2FA verification for existing user
-      log('INFO', 'Processing EXISTING 2FA verification');
-      
+      log("INFO", "Processing EXISTING 2FA verification for login");
+
+      let sessionData = null;
+      let sessionTokenToUse = sessionToken;
+
+      // If no sessionToken provided but username provided, get the latest session
+      if (!sessionTokenToUse && username) {
+        log("INFO", "No sessionToken provided, searching latest session for user", { username });
+
+        const latestSession = await databaseManager.query(
+          "SELECT TOP 1 SessionToken, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ? ORDER BY LastUsedTS DESC",
+          [username]
+        );
+
+        if (latestSession.length === 0) {
+          return res.status(401).json({
+            success: false,
+            message: "No active session found for user",
+          });
+        }
+
+        sessionTokenToUse = latestSession[0].SessionToken;
+        log("INFO", "Found latest session", { 
+          sessionToken: sessionTokenToUse.substring(0, 8) + "...",
+          username 
+        });
+      }
+
+      // Get session data
       const sessionQuery = await databaseManager.query(
         "SELECT * FROM appblddbo.TwoFactorSession WHERE SessionToken = ?",
-        [sessionToken]
+        [sessionTokenToUse]
       );
 
       if (sessionQuery.length === 0) {
@@ -1284,20 +1407,19 @@ router.post("/auth/verify-2fa", async (req, res) => {
         });
       }
 
-      const sessionData = JSON.parse(sessionQuery[0].SessionInfo);
-      const { username, originalPasswordHash, userId } = sessionData;
+      sessionData = JSON.parse(sessionQuery[0].SessionInfo);
+      const { username: sessionUsername, originalPasswordHash, userId } = sessionData;
 
-      // ✅ VALIDATION ET CONVERSION
       const userIdInt = userId ? parseInt(userId) : null;
       if (userId && isNaN(userIdInt)) {
-        log('ERROR', 'Invalid userId in session', { 
-          userId, 
+        log("ERROR", "Invalid userId in session", {
+          userId,
           type: typeof userId,
-          username 
+          username: sessionUsername,
         });
         return res.status(400).json({
           success: false,
-          message: "Invalid session data - userId not numeric"
+          message: "Invalid session data - userId not numeric",
         });
       }
 
@@ -1308,12 +1430,10 @@ router.post("/auth/verify-2fa", async (req, res) => {
         });
       }
 
-
-
-      log('DEBUG', 'Session userId validation', {
+      log("DEBUG", "Session userId validation", {
         originalUserId: userId,
         convertedUserId: userIdInt,
-        username: username
+        username: sessionUsername,
       });
 
       const verificationResult = await totpService.verifyTOTP(userIdInt, totpCode);
@@ -1337,42 +1457,43 @@ router.post("/auth/verify-2fa", async (req, res) => {
 
       await databaseManager.query(
         "UPDATE appblddbo.TwoFactorSession SET LastUsedTS = CURRENT_TIMESTAMP, SessionInfo = ? WHERE SessionToken = ?",
-        [JSON.stringify(updatedSessionData), sessionToken]
+        [JSON.stringify(updatedSessionData), sessionTokenToUse]
       );
 
-      // Activate 2FA for user
-      const activationResult = await databaseManager.query(
-        "SELECT * FROM appblddbo.PRC_ActivateTwoFactor(?)",
-        [username]
+      // Get existing DBPassword
+      const userQuery = await databaseManager.query(
+        "SELECT DBPassword FROM appblddbo.TwoFactorUser WHERE TwoFactorUserID = ?",
+        [userIdInt]
       );
 
-      const activation = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
-      const dbPassword = activation.success ? activation.data?.DBPassword : null;
+      const dbPassword = userQuery.length > 0 ? userQuery[0].DBPassword : null;
 
-      if (activation.success && originalPasswordHash) {
-        await restoreOriginalPassword(username, originalPasswordHash);
+      // Restore original password if available
+      if (originalPasswordHash) {
+        await restoreOriginalPassword(sessionUsername, originalPasswordHash);
+        log("INFO", `Original password restored for login verification: ${sessionUsername}`);
       }
 
-      log('INFO', `Existing 2FA verification successful`, { username });
+      log("INFO", `2FA verification successful - providing DBPassword for login: ${sessionUsername}`);
 
       return res.json({
         success: true,
         message: "2FA verification successful",
-        sessionToken,
+        sessionToken: sessionTokenToUse,
         user: {
-          username,
+          username: sessionUsername,
           id: userIdInt,
           originalPasswordPreserved: true,
         },
         dbPassword: dbPassword,
+        note: "Use dbPassword for final login step",
       });
     }
-
   } catch (error) {
     if (databaseManager.isConnected()) {
       await databaseManager.query("ROLLBACK TRANSACTION");
     }
-    
+
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1380,6 +1501,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
     });
   }
 });
+
 
 router.post("/auth/status", async (req, res) => {
   try {
@@ -1416,37 +1538,38 @@ router.post("/auth/status", async (req, res) => {
 
     // Get devices (only active ones)
     const deviceQuery = await databaseManager.query(
-     "SELECT * FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
-      [userIdInt] 
+      "SELECT * FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
+      [userIdInt]
     );
-    
 
-
-    // Get getValid Session Count 
+    // Get getValid Session Count
     async function getValidSessionCount(username) {
-        try {
-            const sessions = await databaseManager.query(
-                "SELECT SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
-                [username]
-            );
+      try {
+        const sessions = await databaseManager.query(
+          "SELECT SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
+          [username]
+        );
 
-            let validCount = 0;
-            for (const session of sessions) {
-                try {
-                    const sessionData = JSON.parse(session.SessionInfo);
-                    if (sessionData.authenticated2FA) {
-                        validCount++;
-                    }
-                } catch (e) {
-                    // Ignorer les sessions avec du JSON invalide
-                }
+        let validCount = 0;
+        for (const session of sessions) {
+          try {
+            const sessionData = JSON.parse(session.SessionInfo);
+            if (sessionData.authenticated2FA) {
+              validCount++;
             }
-
-            return validCount;
-        } catch (error) {
-            log('ERROR', 'Error counting valid sessions', { username, error: error.message });
-            return 0;
+          } catch (e) {
+            // Ignorer les sessions avec du JSON invalide
+          }
         }
+
+        return validCount;
+      } catch (error) {
+        log("ERROR", "Error counting valid sessions", {
+          username,
+          error: error.message,
+        });
+        return 0;
+      }
     }
 
     const activeSessions = await getValidSessionCount(username);
@@ -1470,7 +1593,10 @@ router.post("/auth/status", async (req, res) => {
       originalPasswordPreserved: true,
     });
   } catch (error) {
-    log('ERROR', 'Status check error', { username: req.body.username, error: error.message });
+    log("ERROR", "Status check error", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1493,7 +1619,10 @@ router.post("/auth/disable-2fa", async (req, res) => {
     await databaseManager.query("BEGIN TRANSACTION");
 
     // Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(401).json({
@@ -1530,13 +1659,13 @@ router.post("/auth/disable-2fa", async (req, res) => {
     // Disable 2FA completely
     await databaseManager.query(
       "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 1, DBPassword = NULL WHERE TwoFactorUserID = ?",
-      [userIdInt] 
+      [userIdInt]
     );
 
     // Deactivate all devices
     await databaseManager.query(
       "UPDATE appblddbo.TwoFactorDevice SET Inactive = 1 WHERE TwoFactorUserID = ?",
-      [userIdInt] 
+      [userIdInt]
     );
 
     // Clear all sessions
@@ -1546,18 +1675,24 @@ router.post("/auth/disable-2fa", async (req, res) => {
     );
 
     // CRITICAL: Restore original password
-    const restored = await restoreOriginalPassword(username, originalPasswordHash);
+    const restored = await restoreOriginalPassword(
+      username,
+      originalPasswordHash
+    );
     if (!restored) {
       await databaseManager.query("ROLLBACK TRANSACTION");
       throw new Error("Failed to restore original password");
     }
 
     // Verify that password works
-    const finalPasswordTest = await verifyPasswordEnhanced({ username, password });
+    const finalPasswordTest = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
 
     await databaseManager.query("COMMIT TRANSACTION");
 
-    log('INFO', `2FA disabled successfully for: ${username}`);
+    log("INFO", `2FA disabled successfully for: ${username}`);
 
     res.json({
       success: true,
@@ -1580,7 +1715,10 @@ router.post("/auth/disable-2fa", async (req, res) => {
     });
   } catch (error) {
     await databaseManager.query("ROLLBACK TRANSACTION");
-    log('ERROR', 'Error disabling 2FA', { username: req.body.username, error: error.message });
+    log("ERROR", "Error disabling 2FA", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1600,27 +1738,26 @@ router.get("/sessions/list/:username", async (req, res) => {
     const { username } = req.params;
 
     const sessions = await databaseManager.query(
-            "SELECT SessionToken, LastUsedTS, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ? ORDER BY 1 DESC",
-            [username]
-      );
+      "SELECT SessionToken, LastUsedTS, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ? ORDER BY 1 DESC",
+      [username]
+    );
 
     const sessionList = [];
 
     for (const session of sessions) {
-
       let sessionData = {};
-      
+
       try {
         sessionData = JSON.parse(session.SessionInfo);
         console.log("session Data", sessionData);
       } catch (e) {
-        sessionData = {};       
+        sessionData = {};
       }
 
       // Filter - Only include sessions with valid 2FA authentication
-       if (!sessionData.authenticated2FA) {
-          continue; // Skip non-2FA sessions
-        }
+      if (!sessionData.authenticated2FA) {
+        continue; // Skip non-2FA sessions
+      }
 
       // Get current device info if deviceId exists
       let currentDeviceInfo = sessionData.deviceInfo || "Unknown Device";
@@ -1632,7 +1769,7 @@ router.get("/sessions/list/:username", async (req, res) => {
           if (!isNaN(deviceIdInt)) {
             const deviceQuery = await databaseManager.query(
               "SELECT DeviceInfo, Inactive FROM appblddbo.TwoFactorDevice WHERE TwoFactorDeviceID = ?",
-              [deviceIdInt] 
+              [deviceIdInt]
             );
 
             if (deviceQuery.length > 0) {
@@ -1640,13 +1777,14 @@ router.get("/sessions/list/:username", async (req, res) => {
               deviceStatus = deviceQuery[0].Inactive ? "Inactive" : "Active";
             } else {
               deviceStatus = "Deleted";
-              currentDeviceInfo = sessionData.verifiedDeviceInfo || "Deleted Device";
+              currentDeviceInfo =
+                sessionData.verifiedDeviceInfo || "Deleted Device";
             }
           }
         } catch (error) {
-          log('WARN', 'Error fetching device info for session', { 
+          log("WARN", "Error fetching device info for session", {
             sessionToken: session.SessionToken.substring(0, 8),
-            deviceId: sessionData.deviceId 
+            deviceId: sessionData.deviceId,
           });
         }
       }
@@ -1658,11 +1796,11 @@ router.get("/sessions/list/:username", async (req, res) => {
         ipAddress: sessionData.ipAddress,
         userAgent: sessionData.userAgent,
         deviceInfo: currentDeviceInfo,
-        deviceId: sessionData.deviceId ? parseInt(sessionData.deviceId) : null, 
-        deviceStatus: deviceStatus, 
+        deviceId: sessionData.deviceId ? parseInt(sessionData.deviceId) : null,
+        deviceStatus: deviceStatus,
         // authenticated2FA: sessionData.authenticated2FA || false,
         authenticated2FA: true,
-        sessionType: sessionData.sessionType || "legacy"
+        sessionType: sessionData.sessionType || "legacy",
       });
     }
 
@@ -1676,7 +1814,10 @@ router.get("/sessions/list/:username", async (req, res) => {
       sessions: sessionList,
     });
   } catch (error) {
-    log('ERROR', 'List sessions error', { username: req.params.username, error: error.message });
+    log("ERROR", "List sessions error", {
+      username: req.params.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1702,7 +1843,9 @@ router.post("/sessions/logout", async (req, res) => {
       [sessionToken]
     );
 
-    log('INFO', `Session logged out`, { sessionToken: sessionToken.substring(0, 8) + "..." });
+    log("INFO", `Session logged out`, {
+      sessionToken: sessionToken.substring(0, 8) + "...",
+    });
 
     res.json({
       success: true,
@@ -1710,7 +1853,7 @@ router.post("/sessions/logout", async (req, res) => {
       sessionToken: sessionToken.substring(0, 8) + "...",
     });
   } catch (error) {
-    log('ERROR', 'Logout session error', { error: error.message });
+    log("ERROR", "Logout session error", { error: error.message });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1732,7 +1875,10 @@ router.post("/sessions/logout-all", async (req, res) => {
     }
 
     // Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       return res.status(401).json({
         success: false,
@@ -1745,7 +1891,10 @@ router.post("/sessions/logout-all", async (req, res) => {
       [username]
     );
 
-    log('INFO', `All sessions logged out for user`, { username, sessionsRemoved: result.affectedRows || 0 });
+    log("INFO", `All sessions logged out for user`, {
+      username,
+      sessionsRemoved: result.affectedRows || 0,
+    });
 
     res.json({
       success: true,
@@ -1754,7 +1903,10 @@ router.post("/sessions/logout-all", async (req, res) => {
       sessionsRemoved: result.affectedRows || 0,
     });
   } catch (error) {
-    log('ERROR', 'Logout all sessions error', { username: req.body.username, error: error.message });
+    log("ERROR", "Logout all sessions error", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1764,13 +1916,13 @@ router.post("/sessions/logout-all", async (req, res) => {
 });
 
 // =============================================================================
-// DEVICE MANAGEMENT ROUTES 
+// DEVICE MANAGEMENT ROUTES
 // =============================================================================
 
 // List user devices
 router.get("/devices/list/:username", async (req, res) => {
   try {
-    const { username } = req.params;   
+    const { username } = req.params;
 
     // Get user information including 2FA status
     const userQuery = await databaseManager.query(
@@ -1780,7 +1932,10 @@ router.get("/devices/list/:username", async (req, res) => {
 
     // Case 1: User not found in TwoFactorUser = 2FA never activated
     if (userQuery.length === 0) {
-      log('INFO', `User ${username} not found in TwoFactorUser - 2FA never activated`);
+      log(
+        "INFO",
+        `User ${username} not found in TwoFactorUser - 2FA never activated`
+      );
       return res.json({
         success: true,
         message: "Devices retrieved",
@@ -1795,17 +1950,20 @@ router.get("/devices/list/:username", async (req, res) => {
 
     const user = userQuery[0];
 
-    // Convert TwoFactorUserID to Int    
+    // Convert TwoFactorUserID to Int
     const userIdInt = parseInt(user.TwoFactorUserID);
     if (isNaN(userIdInt)) {
       throw new Error(`Invalid TwoFactorUserID: ${user.TwoFactorUserID}`);
     }
 
-    log('DEBUG', `User ${username} found - Disable2FA: ${user.Disable2FA}, UserID: ${userIdInt}`);
+    log(
+      "DEBUG",
+      `User ${username} found - Disable2FA: ${user.Disable2FA}, UserID: ${userIdInt}`
+    );
 
     // Case 2: User exists but 2FA is disabled
     if (user.Disable2FA === 1) {
-      log('INFO', `User ${username} has 2FA disabled`);
+      log("INFO", `User ${username} has 2FA disabled`);
       return res.json({
         success: true,
         message: "Devices retrieved",
@@ -1819,20 +1977,22 @@ router.get("/devices/list/:username", async (req, res) => {
     }
 
     // Case 3: 2FA is enabled - get active devices
-    log('DEBUG', `User ${username} has 2FA enabled - loading devices`);
+    log("DEBUG", `User ${username} has 2FA enabled - loading devices`);
     const devices = await databaseManager.query(
       "SELECT * FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ? AND Inactive IS NULL",
-      [userIdInt] 
+      [userIdInt]
     );
 
-    log('DEBUG', `Found ${devices.length} active devices for ${username}`);
+    log("DEBUG", `Found ${devices.length} active devices for ${username}`);
 
     const deviceList = devices.map((device) => ({
       deviceId: device.TwoFactorDeviceID,
       authMethod: device.AuthMethod,
       deviceInfo: device.DeviceInfo,
       isActive: !device.Inactive,
-      secretData: device.SecretData ? maskSensitiveData(device.SecretData) : null,
+      secretData: device.SecretData
+        ? maskSensitiveData(device.SecretData)
+        : null,
     }));
 
     res.json({
@@ -1846,7 +2006,10 @@ router.get("/devices/list/:username", async (req, res) => {
       debugInfo: `${deviceList.length} active devices found`,
     });
   } catch (error) {
-    log('ERROR', 'List devices error', { username: req.params.username, error: error.message });
+    log("ERROR", "List devices error", {
+      username: req.params.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1889,7 +2052,10 @@ router.put("/devices/rename/:deviceId", async (req, res) => {
     await databaseManager.query("BEGIN TRANSACTION");
 
     // Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(401).json({
@@ -1904,7 +2070,7 @@ router.put("/devices/rename/:deviceId", async (req, res) => {
        FROM appblddbo.TwoFactorDevice d 
        JOIN appblddbo.TwoFactorUser u ON d.TwoFactorUserID = u.TwoFactorUserID 
        WHERE d.TwoFactorDeviceID = ? AND u.LoginName = ? AND d.Inactive IS NULL`,
-      [deviceIdInt, username] 
+      [deviceIdInt, username]
     );
 
     if (deviceQuery.length === 0) {
@@ -1920,19 +2086,23 @@ router.put("/devices/rename/:deviceId", async (req, res) => {
     // Update device name with proper UTF-8 support
     await databaseManager.query(
       "UPDATE appblddbo.TwoFactorDevice SET DeviceInfo = ? WHERE TwoFactorDeviceID = ?",
-      [newDeviceName.trim(), deviceIdInt] 
+      [newDeviceName.trim(), deviceIdInt]
     );
 
     // Update all sessions that reference this device
-    const updatedSessions = await updateSessionsDeviceInfo(username, oldDeviceName, newDeviceName.trim());
+    const updatedSessions = await updateSessionsDeviceInfo(
+      username,
+      oldDeviceName,
+      newDeviceName.trim()
+    );
 
     await databaseManager.query("COMMIT TRANSACTION");
 
-    log('INFO', `Device renamed`, { 
-      deviceId: deviceIdInt, 
-      oldName: oldDeviceName, 
+    log("INFO", `Device renamed`, {
+      deviceId: deviceIdInt,
+      oldName: oldDeviceName,
       newName: newDeviceName.trim(),
-      sessionsUpdated: updatedSessions 
+      sessionsUpdated: updatedSessions,
     });
 
     res.json({
@@ -1947,9 +2117,9 @@ router.put("/devices/rename/:deviceId", async (req, res) => {
     });
   } catch (error) {
     await databaseManager.query("ROLLBACK TRANSACTION");
-    log('ERROR', 'Rename device error', { 
-      deviceId: parseInt(req.params.deviceId), 
-      error: error.message 
+    log("ERROR", "Rename device error", {
+      deviceId: parseInt(req.params.deviceId),
+      error: error.message,
     });
     res.status(500).json({
       success: false,
@@ -1984,7 +2154,10 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
     await databaseManager.query("BEGIN TRANSACTION");
 
     // Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(401).json({
@@ -1999,7 +2172,7 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
        FROM appblddbo.TwoFactorDevice d 
        JOIN appblddbo.TwoFactorUser u ON d.TwoFactorUserID = u.TwoFactorUserID 
        WHERE d.Inactive IS NULL AND d.TwoFactorDeviceID = ? AND u.LoginName = ?`,
-      [deviceIdInt, username] 
+      [deviceIdInt, username]
     );
 
     if (deviceQuery.length === 0) {
@@ -2014,7 +2187,9 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
     const userIdInt = parseInt(deviceQuery[0].TwoFactorUserID);
     if (isNaN(userIdInt)) {
       await databaseManager.query("ROLLBACK TRANSACTION");
-      throw new Error(`Invalid TwoFactorUserID: ${deviceQuery[0].TwoFactorUserID}`);
+      throw new Error(
+        `Invalid TwoFactorUserID: ${deviceQuery[0].TwoFactorUserID}`
+      );
     }
 
     // Check if this is the last active device
@@ -2022,7 +2197,7 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
       `SELECT COUNT(*) as count 
        FROM appblddbo.TwoFactorDevice 
        WHERE TwoFactorUserID = ? AND Inactive IS NULL`,
-      [userIdInt] 
+      [userIdInt]
     );
 
     if (activeDeviceCount[0].count === 1) {
@@ -2040,14 +2215,20 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
 
       // Call the stored procedure to disable 2FA device
       try {
-        log('INFO', `Calling PRC_Disable2FADevice for last device: ${deviceIdInt}`);
+        log(
+          "INFO",
+          `Calling PRC_Disable2FADevice for last device: ${deviceIdInt}`
+        );
 
         const procedureResult = await databaseManager.query(
           "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?)",
-          [deviceIdInt, password, username] 
+          [deviceIdInt, password, username]
         );
 
-        const result = formatProcedureResult(procedureResult, "PRC_Disable2FADevice");
+        const result = formatProcedureResult(
+          procedureResult,
+          "PRC_Disable2FADevice"
+        );
 
         if (result.success) {
           // Update all sessions to show 2FA disabled
@@ -2067,13 +2248,19 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
                 [updatedSessionInfo, session.SessionToken]
               );
             } catch (parseError) {
-              log('WARN', `Could not parse session info for token: ${session.SessionToken.substring(0, 8)}...`);
+              log(
+                "WARN",
+                `Could not parse session info for token: ${session.SessionToken.substring(
+                  0,
+                  8
+                )}...`
+              );
             }
           }
 
           await databaseManager.query("COMMIT TRANSACTION");
 
-          log('INFO', `Last device removed and 2FA disabled: ${username}`);
+          log("INFO", `Last device removed and 2FA disabled: ${username}`);
 
           res.json({
             success: true,
@@ -2096,7 +2283,10 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
         }
       } catch (error) {
         await databaseManager.query("ROLLBACK TRANSACTION");
-        log('ERROR', 'PRC_Disable2FADevice error', { deviceId: deviceIdInt, error: error.message });
+        log("ERROR", "PRC_Disable2FADevice error", {
+          deviceId: deviceIdInt,
+          error: error.message,
+        });
         res.status(500).json({
           success: false,
           message: "Failed to disable 2FA device",
@@ -2107,14 +2297,17 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
       // Not the last device - mark as inactive and clear sessions for this device
       await databaseManager.query(
         "UPDATE appblddbo.TwoFactorDevice SET Inactive = 1 WHERE TwoFactorDeviceID = ?",
-        [deviceIdInt] 
+        [deviceIdInt]
       );
 
-      const cleanedSessions = await cleanupSessionsForDevice(username, deviceIdInt);
+      const cleanedSessions = await cleanupSessionsForDevice(
+        username,
+        deviceIdInt
+      );
 
       await databaseManager.query("COMMIT TRANSACTION");
 
-      log('INFO', `Device removed (marked inactive): ${deviceIdInt}`);
+      log("INFO", `Device removed (marked inactive): ${deviceIdInt}`);
 
       res.json({
         success: true,
@@ -2129,9 +2322,9 @@ router.delete("/devices/remove/:deviceId", async (req, res) => {
     }
   } catch (error) {
     await databaseManager.query("ROLLBACK TRANSACTION");
-    log('ERROR', 'Remove device error', { 
-      deviceId: parseInt(req.params.deviceId), 
-      error: error.message 
+    log("ERROR", "Remove device error", {
+      deviceId: parseInt(req.params.deviceId),
+      error: error.message,
     });
     res.status(500).json({
       success: false,
@@ -2156,7 +2349,10 @@ router.post("/devices/add", async (req, res) => {
     await databaseManager.query("BEGIN TRANSACTION");
 
     // Verify credentials
-    const isValidPassword = await verifyPasswordEnhanced({ username, password });
+    const isValidPassword = await verifyPasswordEnhanced({
+      username,
+      password,
+    });
     if (!isValidPassword.success) {
       await databaseManager.query("ROLLBACK TRANSACTION");
       return res.status(401).json({
@@ -2189,12 +2385,15 @@ router.post("/devices/add", async (req, res) => {
     }
 
     // Enhanced device info detection
-    const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
+    const enhancedDeviceInfo = detectDeviceFromUserAgent(
+      req.get("User-Agent"),
+      deviceInfo
+    );
 
     // Check if device with same name already exists
     const existingDevices = await databaseManager.query(
       "SELECT * FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ? AND DeviceInfo = ?",
-      [userIdInt, enhancedDeviceInfo] 
+      [userIdInt, enhancedDeviceInfo]
     );
 
     if (existingDevices.length > 0) {
@@ -2202,7 +2401,8 @@ router.post("/devices/add", async (req, res) => {
       return res.status(409).json({
         success: false,
         message: `A device with name "${enhancedDeviceInfo}" already exists`,
-        suggestion: "Try using a different device name or remove the existing device first",
+        suggestion:
+          "Try using a different device name or remove the existing device first",
       });
     }
 
@@ -2211,14 +2411,18 @@ router.post("/devices/add", async (req, res) => {
 
     // Add device
     const deviceId = await addTwoFactorDevice(
-      userIdInt, 
+      userIdInt,
       enhancedDeviceInfo,
       totpData.secret
     );
 
     await databaseManager.query("COMMIT TRANSACTION");
 
-    log('INFO', `New device added`, { username, deviceInfo: enhancedDeviceInfo, deviceId });
+    log("INFO", `New device added`, {
+      username,
+      deviceInfo: enhancedDeviceInfo,
+      deviceId,
+    });
 
     res.status(201).json({
       success: true,
@@ -2236,7 +2440,10 @@ router.post("/devices/add", async (req, res) => {
     });
   } catch (error) {
     await databaseManager.query("ROLLBACK TRANSACTION");
-    log('ERROR', 'Add device error', { username: req.body.username, error: error.message });
+    log("ERROR", "Add device error", {
+      username: req.body.username,
+      error: error.message,
+    });
     res.status(500).json({
       success: false,
       message: "Internal server error",
