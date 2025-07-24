@@ -27,6 +27,7 @@
     "express-validator": "^7.2.1",
     "helmet": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
+    "node-windows": "^1.0.0-beta.8",
     "odbc": "^2.4.9",
     "otpauth": "^9.4.0",
     "passport": "^0.7.0",
