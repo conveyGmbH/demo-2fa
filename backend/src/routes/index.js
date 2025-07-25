@@ -1,4 +1,3 @@
-// Backend/src/routes/index.js 
 const express = require("express");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
@@ -7,9 +6,8 @@ const databaseManager = require("../config/database");
 
 const router = express.Router();
 
-// =============================================================================
+
 // CONFIGURATION
-// =============================================================================
 
 const CONFIG = {
   totp: {
@@ -31,11 +29,10 @@ const CONFIG = {
   },
 };
 
-// =============================================================================
 // LOGGING UTILITY
-// =============================================================================
 
-// Only for dev
+
+// only for developemnt
 function log(level, message, data = null) {
   if (!CONFIG.logging.enabled) return;
 
@@ -62,11 +59,9 @@ function log(level, message, data = null) {
   }
 }
 
-// =============================================================================
 // SECURITY VERIFICATION FUNCTION
-// =============================================================================
 
-// Middleware d'authentification par session
+// middleware d'authentification par session
 async function authenticateSession(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -75,7 +70,7 @@ async function authenticateSession(req, res, next) {
       : req.body.sessionToken;
 
     if (sessionToken) {
-      // Check if the session token is valid
+      // check if the session token is valid
       const sessionQuery = await databaseManager.query(
         "SELECT * FROM appblddbo.TwoFactorSession WHERE SessionToken = ? AND LastUsedTS > DATEADD(hour, -24, CURRENT_TIMESTAMP)",
         [sessionToken]
@@ -100,7 +95,7 @@ async function authenticateSession(req, res, next) {
       }
     }
 
-    // Fallback vers authentification par credentials
+    // fallback vers authentification par credentials
     const { username, password } = req.body;
     if (username && password) {
       const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
@@ -129,7 +124,7 @@ async function authenticateSession(req, res, next) {
 
 
 
-// Verify credentials for every endpoint using PRC_CheckGlobalPassword
+// check credentials for every endpoint using PRC_CheckGlobalPassword
 async function verifyCredentialsForEndpoint(username, password) {
   try {
     if (!username || !password) {
@@ -182,9 +177,7 @@ async function verifyCredentialsForEndpoint(username, password) {
   }
 }
 
-// =============================================================================
 // TOTP SERVICE
-// =============================================================================
 
 class TOTPService {
   constructor() {
@@ -390,9 +383,7 @@ class TOTPService {
 
 const totpService = new TOTPService();
 
-// =============================================================================
 // HELPER FUNCTIONS
-// =============================================================================
 
 async function getTwoFactorUser(username) {
   try {
@@ -417,6 +408,7 @@ async function getTwoFactorUser(username) {
   }
 }
 
+// add 2FA device
 async function addTwoFactorDevice(userId, deviceInfo, secret) {
   try {
     const userIdInt = parseInt(userId);
@@ -587,9 +579,8 @@ async function cleanupSessionsForDevice(username, deviceId) {
   }
 }
 
-// =============================================================================
+
 // API ROUTES - ALL POST WITH CREDENTIAL VERIFICATION
-// =============================================================================
 
 router.use((req, res, next) => {
   console.log("🔍 ROUTE DEBUG:", {
@@ -634,7 +625,7 @@ router.get("/", (req, res) => {
   });
 });
 
-// System Health Check
+// system Health Check
 router.get("/health", async (req, res) => {
   try {
     const dbHealthy = await databaseManager.healthCheck();
@@ -659,9 +650,7 @@ router.get("/health", async (req, res) => {
   }
 });
 
-// =============================================================================
 // AUTHENTICATION ROUTES
-// =============================================================================
 
 // Check credentials using PRC_CheckGlobalPassword
 router.post("/auth/check-credentials", async (req, res) => {
@@ -716,7 +705,7 @@ router.post("/auth/check-credentials", async (req, res) => {
   }
 });
 
-// Login endpoint
+//login endpoint
 router.post("/auth/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -730,7 +719,7 @@ router.post("/auth/login", async (req, res) => {
 
     log("INFO", `Login attempt for user: ${username}`);
 
-    // STEP 1: Verify credentials first using PRC_CheckGlobalPassword
+    // 1. Verify credentials first using PRC_CheckGlobalPassword
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
     
     if (!credentialsCheck.success) {
@@ -741,7 +730,7 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
-    // STEP 2: Check 2FA status
+    // 2. Check 2FA status
     const userQuery = await databaseManager.query(
       "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
@@ -754,7 +743,7 @@ router.post("/auth/login", async (req, res) => {
 
     if (has2FARecord && is2FAEnabled) {
       
-      // User has 2FA enabled
+      // user has 2FA enabled
       log("INFO", `Processing 2FA-enabled user: ${username}`);
 
       const userIdInt = parseInt(userQuery[0].TwoFactorUserID);
@@ -805,7 +794,8 @@ router.post("/auth/login", async (req, res) => {
         },
       });
     } else if (has2FARecord && !is2FAEnabled) {
-      // User has 2FA disabled
+
+      // user has 2FA disabled
       log("INFO", `User has 2FA disabled: ${username}`);
       return res.json({
         success: true,
@@ -818,7 +808,8 @@ router.post("/auth/login", async (req, res) => {
         },
       });
     } else {
-      // User not in 2FA system
+
+      // user is not in 2FA system
       log("INFO", `User not in 2FA system: ${username}`);
       return res.json({
         success: false,
@@ -844,7 +835,7 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-// Setup 2FA
+// setup 2FA
 router.post("/auth/setup-2fa", async (req, res) => {
   try {
     const { username, password, deviceInfo = "Web Browser" } = req.body;
@@ -856,7 +847,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
       });
     }
 
-    // STEP 1: Verify credentials first
+    // 1.  Verify credentials first
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
     if (!credentialsCheck.success) {
       return res.status(401).json({
@@ -866,7 +857,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
       });
     }
 
-    // STEP 2: Ensure user exists in TwoFactorUser table for first setup
+    // 2. Ensure user exists in TwoFactorUser table for first setup
     let user = await getTwoFactorUser(username);
     if (!user) {
       console.log(`🔧 Creating new TwoFactorUser record for: ${username}`);
@@ -893,16 +884,16 @@ router.post("/auth/setup-2fa", async (req, res) => {
       });
     }
 
-    // STEP 2: Generate TOTP secret 
+    // 3. Generate TOTP secret 
     const totpData = await totpService.generateTOTP(username);
 
-    // STEP 3: Enhanced device info detection
+    // 4. Enhanced device info detection
     const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
 
-    // STEP 4: Create temporary session token for this setup
+    // 5. Create temporary session token for this setup
     const sessionToken = uuidv4();
 
-    // STEP 5: Store the setup data temporarily (NOT in database)
+    // 6. Store the setup data temporarily (NOT in database)
     const setupData = {
       username,
       password, 
@@ -912,8 +903,6 @@ router.post("/auth/setup-2fa", async (req, res) => {
       userAgent: req.get("User-Agent"),
     };
 
-
-
     totpService.storePendingSetup(sessionToken, setupData);
 
     log("INFO", `2FA setup initiated with credential verification`, {
@@ -921,7 +910,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
       deviceInfo: enhancedDeviceInfo,
     });
 
-    // STEP 6: Return QR code and session token for verification
+    // 7. Return QR code and session token for verification
     res.status(200).json({
       success: true,
       message: "2FA setup initiated - scan QR code and verify",
@@ -981,7 +970,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
 
     if (pendingSetup) {
 
-      // 2FA setup verification      
+      // 2FA setup verification
       log("INFO", "Processing 2FA setup verification", {
         username: pendingSetup.username,
       });
@@ -998,7 +987,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
         pendingSetup.deviceInfo = trimmedDeviceName;
       }
 
-      // Verify TOTP code first
+      // verify TOTP code first
       const verification = await totpService.verifyTOTPWithSecret(
         pendingSetup.totpSecret,
         totpCode
@@ -1014,7 +1003,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
       await databaseManager.query("BEGIN TRANSACTION");
       try {
 
-        // Get user (must exist in TwoFactorUser)       
+        // get user (must exist in TwoFactorUser)       
         let user = await getTwoFactorUser(pendingSetup.username);
         if (!user) {
           console.log(`🔧 Creating TwoFactorUser during verification for: ${pendingSetup.username}`);
@@ -1041,14 +1030,14 @@ router.post("/auth/verify-2fa", async (req, res) => {
           throw new Error(`Invalid TwoFactorUserID: ${user.TwoFactorUserID}`);
         }
 
-        // Check if first device
+        // check if first device
         const existingDevices = await databaseManager.query(
           "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
           [userIdInt]
         );
         const isFirstSetup = existingDevices[0].count === 0;
 
-        // Clean up old devices if first setup
+        // clean up old devices if first setup
         if (isFirstSetup) {
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorDevice WHERE TwoFactorUserID = ?",
@@ -1056,7 +1045,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
           );
         }
 
-        // Add the new device BEFORE calling PRC_ActivateTwoFactor
+        // add the new device BEFORE calling PRC_ActivateTwoFactor
         const deviceId = await addTwoFactorDevice(
           userIdInt,
           pendingSetup.deviceInfo,
@@ -1083,7 +1072,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
   
         const dbPassword = result.data.DBPassword; 
 
-        // Create authenticated session
+        // create authenticated session
         const newSessionToken = uuidv4();
         const sessionData = {
           username: pendingSetup.username,
@@ -1387,7 +1376,7 @@ router.post("/auth/disable-2fa", async (req, res) => {
     log("INFO", `Disabling 2FA using PRC_Disable2FADevice for user: ${username}`);
     
     const procedureResult = await databaseManager.query(
-      "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?, 1)", // pDeleteDevice = 1
+      "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?, ?)",
       [firstDeviceId, password, username, 1]
     );
 
@@ -1402,7 +1391,7 @@ router.post("/auth/disable-2fa", async (req, res) => {
     }
 
   
-    // Clean up remaining devices manually (procedure only handles one device)
+    // Clean up remaining devices manually 
     await databaseManager.query(
       `UPDATE appblddbo.TwoFactorDevice 
        SET Inactive = 1 
@@ -1447,9 +1436,8 @@ router.post("/auth/disable-2fa", async (req, res) => {
   }
 });
 
-// =============================================================================
+
 // DEVICE MANAGEMENT ROUTES
-// =============================================================================
 
 // List user devices
 router.post("/devices/list", async (req, res) => {
@@ -1839,19 +1827,13 @@ router.post("/devices/remove", async (req, res) => {
         log("INFO", `Calling PRC_Disable2FADevice for last device: ${deviceIdInt}`);
         
         const procedureResult = await databaseManager.query(
-          "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?, 1)", // pDeleteDevice = 1
+          "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?, ?)", 
           [deviceIdInt, password, username, 1]
         );
 
         const result = formatProcedureResult(procedureResult, "PRC_Disable2FADevice");
 
         if (result.success) {
-          //  The procedure handles automatically:
-          // - Device deletion/deactivation
-          // - If last device: calls PRC_SetPasswordGlobal with original password
-          // - UPDATE TwoFactorUser SET Disable2FA=1, DBPassword=NULL
-          // - Multi-server synchronization
-          
           // Clean up sessions
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
@@ -1932,225 +1914,5 @@ router.post("/devices/remove", async (req, res) => {
   }
 });
 
-// =============================================================================
-// SESSION MANAGEMENT ROUTES
-// =============================================================================
-
-// List user sessions
-router.post("/sessions/list", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Username and password required",
-      });
-    }
-
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
-    if (!credentialsCheck.success) {
-      return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
-    }
-
-    // STEP 2: Get sessions
-    const sessions = await databaseManager.query(
-      "SELECT SessionToken, LastUsedTS, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ? ORDER BY LastUsedTS DESC",
-      [username]
-    );
-
-    const sessionList = [];
-
-    for (const session of sessions) {
-      let sessionData = {};
-      try {
-        sessionData = JSON.parse(session.SessionInfo);
-      } catch (e) {
-        sessionData = {};
-      }
-
-      // Only include authenticated 2FA sessions
-      if (!sessionData.authenticated2FA) {
-        continue;
-      }
-
-      // Get current device info if deviceId exists
-      let currentDeviceInfo = sessionData.deviceInfo || "Unknown Device";
-      let deviceStatus = "Unknown";
-
-      if (sessionData.deviceId) {
-        try {
-          const deviceIdInt = parseInt(sessionData.deviceId);
-          if (!isNaN(deviceIdInt)) {
-            const deviceQuery = await databaseManager.query(
-              "SELECT DeviceInfo, Inactive FROM appblddbo.TwoFactorDevice WHERE TwoFactorDeviceID = ?",
-              [deviceIdInt]
-            );
-
-            if (deviceQuery.length > 0) {
-              currentDeviceInfo = deviceQuery[0].DeviceInfo;
-              deviceStatus = deviceQuery[0].Inactive ? "Inactive" : "Active";
-            } else {
-              deviceStatus = "Deleted";
-              currentDeviceInfo = sessionData.verifiedDeviceInfo || "Deleted Device";
-            }
-          }
-        } catch (error) {
-          log("WARN", "Error fetching device info for session", {
-            sessionToken: session.SessionToken.substring(0, 8),
-            deviceId: sessionData.deviceId,
-          });
-        }
-      }
-
-      sessionList.push({
-        sessionToken: session.SessionToken.substring(0, 8) + "...",
-        lastUsed: session.LastUsedTS,
-        loginTime: sessionData.loginTime,
-        ipAddress: sessionData.ipAddress,
-        userAgent: sessionData.userAgent,
-        deviceInfo: currentDeviceInfo,
-        deviceId: sessionData.deviceId ? parseInt(sessionData.deviceId) : null,
-        deviceStatus: deviceStatus,
-        authenticated2FA: true,
-        sessionType: sessionData.sessionType || "legacy",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Authenticated 2FA sessions retrieved",
-      username,
-      sessionCount: sessionList.length,
-      totalSessions: sessions.length,
-      sessions: sessionList,
-    });
-
-  } catch (error) {
-    log("ERROR", "List sessions error", {
-      username: req.body.username,
-      error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-});
-
-// Logout specific session
-router.post("/sessions/logout", async (req, res) => {
-  try {
-    const { sessionToken, username, password } = req.body;
-
-    if (!sessionToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Session token required",
-      });
-    }
-
-    if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Username and password required for verification",
-      });
-    }
-
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
-    if (!credentialsCheck.success) {
-      return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
-    }
-
-    // STEP 2: Remove session
-    await databaseManager.query(
-      "DELETE FROM appblddbo.TwoFactorSession WHERE SessionToken = ? AND UserLogin = ?",
-      [sessionToken, username]
-    );
-
-    log("INFO", `Session logged out with verification`, {
-      sessionToken: sessionToken.substring(0, 8) + "...",
-      username: username
-    });
-
-    res.json({
-      success: true,
-      message: "Session logged out successfully",
-      sessionToken: sessionToken.substring(0, 8) + "...",
-    });
-
-  } catch (error) {
-    log("ERROR", "Logout session error", { error: error.message });
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-});
-
-// Logout all sessions for user
-router.post("/sessions/logout-all", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Username and password required",
-      });
-    }
-
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
-    if (!credentialsCheck.success) {
-      return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
-    }
-
-    // STEP 2: Remove all sessions for user
-    const result = await databaseManager.query(
-      "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
-      [username]
-    );
-
-    log("INFO", `All sessions logged out with verification`, {
-      username,
-      sessionsRemoved: result.affectedRows || 0,
-    });
-
-    res.json({
-      success: true,
-      message: "All sessions logged out successfully",
-      username,
-      sessionsRemoved: result.affectedRows || 0,
-    });
-
-  } catch (error) {
-    log("ERROR", "Logout all sessions error", {
-      username: req.body.username,
-      error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-});
 
 module.exports = router;
