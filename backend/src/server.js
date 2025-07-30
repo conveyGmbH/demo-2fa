@@ -80,6 +80,7 @@ class Server {
 
           // Dev URLs
           "http://localhost:51170",
+          "http://localhost:51171",
           "http://localhost:4000",
         ];
 

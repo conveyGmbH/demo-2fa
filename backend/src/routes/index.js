@@ -123,9 +123,8 @@ async function authenticateSession(req, res, next) {
 }
 
 
-
 // check credentials for every endpoint using PRC_CheckGlobalPassword
-async function verifyCredentialsForEndpoint(username, password) {
+async function verifyCredentialsForEndpoint(username, password, strict = 0) {
   try {
     if (!username || !password) {
       return {
@@ -137,9 +136,10 @@ async function verifyCredentialsForEndpoint(username, password) {
 
     // PRC_CheckGlobalPassword handles all password logic internally
     const result = await databaseManager.query(
-      "SELECT ResultCode, ResultMessage, DBPassword, ODataLocation, InactiveFlag FROM appblddbo.PRC_CheckGlobalPassword(?,?)",
-      [username, password]
+      "SELECT ResultCode, ResultMessage, DBPassword, ODataLocation, InactiveFlag FROM appblddbo.PRC_CheckGlobalPassword(?,?,?)",
+      [username, password, strict ? 1 : 0]
     );
+
 
       if (!result || result.length === 0) {
       return {
@@ -156,7 +156,7 @@ async function verifyCredentialsForEndpoint(username, password) {
         success: true,
         message: "Credentials valid",
         resultCode: authResult.ResultCode,
-        dbPassword: authResult.DBPassword, 
+        // dbPassword: authResult.DBPassword, 
         odataLocation: authResult.ODataLocation,
         inactiveFlag: authResult.InactiveFlag
       };
@@ -172,7 +172,7 @@ async function verifyCredentialsForEndpoint(username, password) {
     return {
       success: false,
       message: "Authentication service error",
-      resultCode: 500
+      resultCode: 401
     };
   }
 }
@@ -625,7 +625,7 @@ router.get("/", (req, res) => {
   });
 });
 
-// system Health Check
+// System Health Check
 router.get("/health", async (req, res) => {
   try {
     const dbHealthy = await databaseManager.healthCheck();
@@ -847,17 +847,29 @@ router.post("/auth/setup-2fa", async (req, res) => {
       });
     }
 
-    // 1.  Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    const userCheck = await databaseManager.query(
+      "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+      [username]
+    );
+
+    const has2FAActive = userCheck.length > 0 && !userCheck[0].Disable2FA;
+
+    console.log("has2FAActive", has2FAActive);
+
+
+    // Verify credentials first
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, has2FAActive);
+
     if (!credentialsCheck.success) {
       return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
+       success: false,
+        message: has2FAActive ? "Access denied - valid 2FA session required" :   credentialsCheck.message,
+        resultCode: credentialsCheck.resultCode,
+        requiresStrictAuth: has2FAActive
       });
     }
 
-    // 2. Ensure user exists in TwoFactorUser table for first setup
+    // Ensure user exists in TwoFactorUser table for first setup
     let user = await getTwoFactorUser(username);
     if (!user) {
       console.log(`🔧 Creating new TwoFactorUser record for: ${username}`);
@@ -1259,8 +1271,8 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
       });
     }
 
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    // 1. Verify credentials first
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, 0);
     if (!credentialsCheck.success) {
       return res.status(401).json({
         success: false,
@@ -1331,7 +1343,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
   }
 });
 
-// Disable 2FA - Uses ONLY PRC_Disable2FADevice with original password
+
 router.post("/auth/disable-2fa", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -1343,17 +1355,15 @@ router.post("/auth/disable-2fa", async (req, res) => {
       });
     }
 
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, false);
     if (!credentialsCheck.success) {
       return res.status(401).json({
         success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
+        message: "Access denied - valid 2FA session required",
+        resultCode: credentialsCheck.resultCode,
       });
     }
 
-    // STEP 2: Get user's first active device to disable
     const activeDevices = await databaseManager.query(
       `SELECT d.TwoFactorDeviceID 
        FROM appblddbo.TwoFactorDevice d 
@@ -1370,14 +1380,13 @@ router.post("/auth/disable-2fa", async (req, res) => {
       });
     }
 
-    // STEP 3: Use PRC_Disable2FADevice to disable 2FA
     const firstDeviceId = activeDevices[0].TwoFactorDeviceID;
     
     log("INFO", `Disabling 2FA using PRC_Disable2FADevice for user: ${username}`);
     
     const procedureResult = await databaseManager.query(
       "SELECT * FROM appblddbo.PRC_Disable2FADevice(?, ?, ?, ?)",
-      [firstDeviceId, password, username, 1]
+      [firstDeviceId, password, username, 1] 
     );
 
     const result = formatProcedureResult(procedureResult, "PRC_Disable2FADevice");
@@ -1390,27 +1399,14 @@ router.post("/auth/disable-2fa", async (req, res) => {
       });
     }
 
-  
-    // Clean up remaining devices manually 
-    await databaseManager.query(
-      `UPDATE appblddbo.TwoFactorDevice 
-       SET Inactive = 1 
-       WHERE TwoFactorDeviceID IN (
-         SELECT d.TwoFactorDeviceID 
-         FROM appblddbo.TwoFactorDevice d 
-         JOIN appblddbo.TwoFactorUser u ON d.TwoFactorUserID = u.TwoFactorUserID 
-         WHERE u.LoginName = ? AND d.Inactive IS NULL
-       )`,
-      [username]
-    );
+    const originalPassword = result.data.DBPassword || password;
 
-    // Clear all sessions
     await databaseManager.query(
       "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
       [username]
     );
 
-    log("INFO", `2FA disabled successfully using PRC_Disable2FADevice: ${username}`);
+    log("INFO", `2FA disabled successfully: ${username}`);
 
     res.json({
       success: true,
@@ -1419,8 +1415,9 @@ router.post("/auth/disable-2fa", async (req, res) => {
         username: username,
         is2FAEnabled: false,
       },
+      originalPassword: originalPassword, 
       procedureResult: result.message,
-      note: "2FA disabled by PRC_Disable2FADevice - user can now login with original password only",
+      note: "2FA disabled - use original password for future logins",
     });
 
   } catch (error) {
@@ -1432,6 +1429,46 @@ router.post("/auth/disable-2fa", async (req, res) => {
       success: false,
       message: "Internal server error",
       error: error.message,
+    });
+  }
+});
+
+
+// Endpoint to get the current password to use
+router.post("/auth/get-current-password", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Username and password required",
+      });
+    }
+
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    
+    if (credentialsCheck.success) {
+
+      return res.json({
+        success: true,
+        currentPassword: password,
+        message: "Current password retrieved",
+        resultCode: credentialsCheck.resultCode,
+      });
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: credentialsCheck.message,
+        resultCode: credentialsCheck.resultCode
+      });
+    }
+
+  } catch (error) {
+    log("ERROR", "Get current password error", { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
@@ -1452,7 +1489,7 @@ router.post("/devices/list", async (req, res) => {
     }
 
     // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, false);
     if (!credentialsCheck.success) {
       return res.status(401).json({
         success: false,
@@ -1547,19 +1584,31 @@ router.post("/devices/add", async (req, res) => {
       });
     }
 
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    // 1. Verify credentials first
+    
+    const userCheck = await databaseManager.query(
+      "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+      [username]
+    );
+    
+    const has2FAActive = userCheck.length > 0 && !userCheck[0].Disable2FA;
+    
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, has2FAActive);
+
     if (!credentialsCheck.success) {
       return res.status(401).json({
         success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
+        message: has2FAActive ? 
+            "Access denied - valid 2FA session required" : 
+            credentialsCheck.message,
+          resultCode: credentialsCheck.resultCode,
+          requiresStrictAuth: has2FAActive
+        });
     }
 
     await databaseManager.query("BEGIN TRANSACTION");
 
-    // STEP 2: Get user
+    // 2. Get user
     const userQuery = await databaseManager.query(
       "SELECT * FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
@@ -1581,10 +1630,10 @@ router.post("/devices/add", async (req, res) => {
       throw new Error(`Invalid TwoFactorUserID: ${user.TwoFactorUserID}`);
     }
 
-    // STEP 3: Enhanced device info detection
+    // 3. Enhanced device info detection
     const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
 
-    // Check if device with same name already exists
+    // check if device with same name already exists
     const existingDevices = await databaseManager.query(
       "SELECT * FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ? AND DeviceInfo = ?",
       [userIdInt, enhancedDeviceInfo]
@@ -1599,7 +1648,7 @@ router.post("/devices/add", async (req, res) => {
       });
     }
 
-    // STEP 4: Generate new TOTP secret and add device
+    // 4. Generate new TOTP secret and add device
     const totpData = await totpService.generateTOTP(username);
     const deviceId = await addTwoFactorDevice(userIdInt, enhancedDeviceInfo, totpData.secret);
 
@@ -1640,7 +1689,10 @@ router.post("/devices/add", async (req, res) => {
   }
 });
 
-// Rename device
+
+// add /devices/add, /devices/rename, /devices/remove, /2FA enable, /2FA Disable, Setup2FA endpoints pStict = 1 like troisieme parametre sinon 0
+
+// rename device 
 router.post("/devices/rename", async (req, res) => {
   try {
     const { deviceId, username, password, newDeviceName } = req.body;
@@ -1660,13 +1712,20 @@ router.post("/devices/rename", async (req, res) => {
       });
     }
 
+      const userCheck = await databaseManager.query(
+        "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+        [username]
+      );
+
+    const has2FAActive = userCheck.length > 0 && !userCheck[0].Disable2FA;
+
     // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, has2FAActive);
     if (!credentialsCheck.success) {
       return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
+        message: has2FAActive ? "Access denied - valid 2FA session required" :   credentialsCheck.message,
+        resultCode: credentialsCheck.resultCode,
+        requiresStrictAuth: has2FAActive
       });
     }
 
@@ -1746,7 +1805,7 @@ router.post("/devices/rename", async (req, res) => {
   }
 });
 
-// Remove device - Uses PRC_Disable2FADevice for last device
+// remove device - Uses PRC_Disable2FADevice for last device
 router.post("/devices/remove", async (req, res) => {
   try {
     const { deviceId, username, password, confirmDelete = false } = req.body;
@@ -1766,19 +1825,20 @@ router.post("/devices/remove", async (req, res) => {
       });
     }
 
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
+    // 1. Verify credentials first
+    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, false);
     if (!credentialsCheck.success) {
       return res.status(401).json({
         success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
+        message: "Access denied - valid 2FA session required",
+        resultCode: credentialsCheck.resultCode,
+        note: "Device removal requires strict authentication"
       });
     }
 
     await databaseManager.query("BEGIN TRANSACTION");
 
-    // STEP 2: Get device and verify ownership
+    // 2: Get device and verify ownership
     const deviceQuery = await databaseManager.query(
       `SELECT d.*, u.LoginName, u.TwoFactorUserID
        FROM appblddbo.TwoFactorDevice d 
@@ -1801,7 +1861,7 @@ router.post("/devices/remove", async (req, res) => {
       throw new Error(`Invalid TwoFactorUserID: ${deviceQuery[0].TwoFactorUserID}`);
     }
 
-    // STEP 3: Check if this is the last active device
+    // 3: Check if this is the last active device
     const activeDeviceCount = await databaseManager.query(
       `SELECT COUNT(*) as count 
        FROM appblddbo.TwoFactorDevice 
@@ -1834,6 +1894,16 @@ router.post("/devices/remove", async (req, res) => {
         const result = formatProcedureResult(procedureResult, "PRC_Disable2FADevice");
 
         if (result.success) {
+
+            const originalPassword = result.data.DBPassword;
+
+              log("INFO", `✅ PRC_Disable2FADevice returned original password`, {
+                username,
+                deviceId: deviceIdInt,
+                passwordLength: originalPassword?.length || 0,
+                passwordStart: originalPassword?.substring(0, 4) + '***' || 'NULL'
+            });
+
           // Clean up sessions
           await databaseManager.query(
             "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
@@ -1852,8 +1922,14 @@ router.post("/devices/remove", async (req, res) => {
               deviceInfo: deviceQuery[0].DeviceInfo,
             },
             twoFactorDisabled: true,
+            originalPassword:originalPassword,
+            currentPassword: originalPassword,
+              data: {
+              DBPassword: originalPassword, 
+              originalPassword: originalPassword 
+            },
             procedureResult: result.message,
-            note: "2FA completely disabled by procedure - user can login with original password",
+            note: "2FA completely disabled - use original password",
           });
         } else {
           await databaseManager.query("ROLLBACK TRANSACTION");
