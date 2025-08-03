@@ -2,8 +2,8 @@ var Service = require('node-windows').Service;
 
 // Create a new service object
 var svc = new Service({
-  name:'2FA Backend Service',
-  description: '2FA Backend Service',
+  name:'convey 2FA Backend Service',
+  description: 'convey 2FA Backend Service',
   script: 'C:\\convey\\Services\\demo-2fa\\backend\\src\\server.js',
 });
 
