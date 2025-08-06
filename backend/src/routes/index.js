@@ -8,7 +8,6 @@ const router = express.Router();
 
 
 // CONFIGURATION
-
 const CONFIG = {
   totp: {
     issuer: "LeadSuccess",
@@ -61,7 +60,7 @@ function log(level, message, data = null) {
 
 // SECURITY VERIFICATION FUNCTION
 
-// middleware d'authentification par session
+//fallback vers authentification par credentials
 async function authenticateSession(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -122,7 +121,6 @@ async function authenticateSession(req, res, next) {
   }
 }
 
-
 // check credentials for every endpoint using PRC_CheckGlobalPassword
 async function verifyCredentialsForEndpoint(username, password, strict = 0) {
   try {
@@ -156,7 +154,6 @@ async function verifyCredentialsForEndpoint(username, password, strict = 0) {
         success: true,
         message: "Credentials valid",
         resultCode: authResult.ResultCode,
-        // dbPassword: authResult.DBPassword, 
         odataLocation: authResult.ODataLocation,
         inactiveFlag: authResult.InactiveFlag
       };
@@ -583,13 +580,6 @@ async function cleanupSessionsForDevice(username, deviceId) {
 // API ROUTES - ALL POST WITH CREDENTIAL VERIFICATION
 
 router.use((req, res, next) => {
-  console.log("🔍 ROUTE DEBUG:", {
-    method: req.method,
-    url: req.url,
-    contentType: req.get("Content-Type"),
-    hasBody: !!req.body,
-    bodyKeys: Object.keys(req.body || {}),
-  });
   next();
 });
 
@@ -625,7 +615,7 @@ router.get("/", (req, res) => {
   });
 });
 
-// System Health Check
+// System health check
 router.get("/health", async (req, res) => {
   try {
     const dbHealthy = await databaseManager.healthCheck();
@@ -838,27 +828,34 @@ router.post("/auth/login", async (req, res) => {
 // setup 2FA
 router.post("/auth/setup-2fa", async (req, res) => {
   try {
+
     const { username, password, deviceInfo = "Web Browser" } = req.body;
 
     if (!username || !password) {
+      console.log("❌ [DEBUG] Missing username or password");
       return res.status(400).json({
         success: false,
         message: "Username and password required",
       });
     }
 
+    await databaseManager.query("BEGIN TRANSACTION");
+
+    try {
+      
     const userCheck = await databaseManager.query(
       "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
     );
+    console.log("🔧 [DEBUG] User check result:", userCheck);
 
     const has2FAActive = userCheck.length > 0 && !userCheck[0].Disable2FA;
 
-    console.log("has2FAActive", has2FAActive);
-
-
     // Verify credentials first
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password, has2FAActive);
+
+    console.log("🔧 [DEBUG] Credentials check result:", credentialsCheck);
+
 
     if (!credentialsCheck.success) {
       return res.status(401).json({
@@ -868,6 +865,12 @@ router.post("/auth/setup-2fa", async (req, res) => {
         requiresStrictAuth: has2FAActive
       });
     }
+
+    await databaseManager.query("BEGIN TRANSACTION");
+
+    try {
+      
+    
 
     // Ensure user exists in TwoFactorUser table for first setup
     let user = await getTwoFactorUser(username);
@@ -882,7 +885,6 @@ router.post("/auth/setup-2fa", async (req, res) => {
       
       user = await getTwoFactorUser(username);
 
-
       if (!user) {
         return res.status(500).json({
           success: false,
@@ -894,6 +896,13 @@ router.post("/auth/setup-2fa", async (req, res) => {
         username,
         twoFactorUserID: user.TwoFactorUserID
       });
+    }
+
+    await databaseManager.query("COMMIT TRANSACTION");
+
+    } catch (error) {
+      await databaseManager.query("ROLLBACK TRANSACTION");
+      throw error;
     }
 
     // 3. Generate TOTP secret 
@@ -941,8 +950,24 @@ router.post("/auth/setup-2fa", async (req, res) => {
       ],
       note: "No database changes made yet - verification required",
     });
+
+  }
+  catch (innerError) {
+      await databaseManager.query("ROLLBACK TRANSACTION");
+      throw innerError;
+    }
   } catch (error) {
+
+    if (databaseManager.isConnected()) {
+      try {
+        await databaseManager.query("ROLLBACK TRANSACTION");
+      } catch (rollbackError) {
+        log("ERROR", "Rollback error in setup-2fa", { error: rollbackError.message });
+      }
+    }
+    
     log("ERROR", "2FA setup error", { username: req.body.username, error: error.message });
+
 
     res.status(500).json({
       success: false,
@@ -1259,6 +1284,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
   }
 });
 
+
 // Get 2FA status
 router.post("/auth/status", authenticateSession, async (req, res) => {
   try {
@@ -1364,6 +1390,22 @@ router.post("/auth/disable-2fa", async (req, res) => {
       });
     }
 
+    // Check if user has 2FA enabled
+    const userQuery = await databaseManager.query(
+      "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+      [username]
+    );
+
+    if (userQuery.length === 0 || userQuery[0].Disable2FA === 1) {
+      return res.json({
+        success: true,
+        message: "2FA already disabled or not configured",
+        originalPassword: password,
+        note: "No changes needed"
+      });
+    }
+
+    // Get any active device (or use first available device ID)
     const activeDevices = await databaseManager.query(
       `SELECT d.TwoFactorDeviceID 
        FROM appblddbo.TwoFactorDevice d 
@@ -1434,7 +1476,7 @@ router.post("/auth/disable-2fa", async (req, res) => {
 });
 
 
-// Endpoint to get the current password to use
+//Endpoint to get the current password to use
 router.post("/auth/get-current-password", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -1689,8 +1731,6 @@ router.post("/devices/add", async (req, res) => {
   }
 });
 
-
-// add /devices/add, /devices/rename, /devices/remove, /2FA enable, /2FA Disable, Setup2FA endpoints pStict = 1 like troisieme parametre sinon 0
 
 // rename device 
 router.post("/devices/rename", async (req, res) => {
