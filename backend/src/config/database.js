@@ -211,7 +211,20 @@ const databaseManager = {
             const result = await connection.query(sql, params);
             return result;
         } catch (error) {
-            console.error(getDateString(), ' Database query error:', error);
+            console.error(getDateString(), ' Database query error:', JSON.stringify(error));
+			if (error.odbcErrors && error.odbcErrors[0] && error.odbcErrors[0].code == -308) {
+				console.error('Retrying once...');
+				try {
+					await databaseManager.close();
+					await databaseManager.connect();
+					const result = await connection.query(sql, params);
+					console.error('Retry success');
+					return result;
+				} catch (error) {
+                  console.error(getDateString(), ' Database query error on reconnect:', error);
+				  throw error;
+				}
+			}
             throw error;
         }
     },
