@@ -45,7 +45,7 @@ async function connectToDB() {
         console.log('Connected to the database');
 
     } catch (error) {
-        console.error(getDateString(), '❌ Error connecting to the database:', error);
+        console.error(getDateString(), '❌ Error connecting to the database '+config.Database.DSN+" as "+config.Database.UID+"\n", error);
         setTimeout(connectToDB, 5000); 
     }
 }
