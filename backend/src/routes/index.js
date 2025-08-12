@@ -19,16 +19,14 @@ const CONFIG = {
     secretLength: 32,
   },
   session: {
-    replayProtectionTTL: 5 * 60 * 1000, // 5 minutes
-    cleanupInterval: 60000, // 1 minute
+    replayProtectionTTL: 5 * 60 * 1000,
+    cleanupInterval: 60000,
   },
   logging: {
     enabled: true,
     sensitive: false,
   },
 };
-
-// LOGGING UTILITY
 
 
 // only for developemnt
@@ -695,6 +693,8 @@ router.post("/auth/check-credentials", async (req, res) => {
   }
 });
 
+// login endpoint
+
 //login endpoint
 router.post("/auth/login", async (req, res) => {
   try {
@@ -709,7 +709,7 @@ router.post("/auth/login", async (req, res) => {
 
     log("INFO", `Login attempt for user: ${username}`);
 
-    // 1. Verify credentials first using PRC_CheckGlobalPassword
+    // Verify credentials first using PRC_CheckGlobalPassword
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
     
     if (!credentialsCheck.success) {
@@ -720,85 +720,105 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
-    // 2. Check 2FA status
+    // Check 2FA status
     const userQuery = await databaseManager.query(
       "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
     );
 
     const has2FARecord = userQuery.length > 0;
-    const is2FAEnabled = has2FARecord && !userQuery[0].Disable2FA;
 
-    log("INFO", `User 2FA status - HasRecord: ${has2FARecord}, Enabled: ${is2FAEnabled}`);
-
-    if (has2FARecord && is2FAEnabled) {
-      
-      // user has 2FA enabled
-      log("INFO", `Processing 2FA-enabled user: ${username}`);
-
+    if (has2FARecord) {
       const userIdInt = parseInt(userQuery[0].TwoFactorUserID);
       if (isNaN(userIdInt)) {
         throw new Error(`Invalid TwoFactorUserID: ${userQuery[0].TwoFactorUserID}`);
       }
 
-      const deviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser");
-      const sessionToken = uuidv4();
-      
-      const sessionData = {
-        username,
-        userId: userIdInt,
-        originalPassword: password, 
-        loginTime: new Date().toISOString(),
-        requires2FA: true,
-        ipAddress: req.ip,
-        userAgent: req.get("User-Agent"),
-        deviceInfo: deviceInfo,
-        deviceId: null,
-        sessionType: "pending_2fa",
-      };
-
-      await databaseManager.query(
-        "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
-        [sessionToken, username, JSON.stringify(sessionData)]
+      const deviceQuery = await databaseManager.query(
+        "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
+        [userIdInt]
       );
-
-      log("INFO", `2FA session created for user: ${username}`);
-
-      return res.json({
-        success: true,
-        message: "User has 2FA enabled - verification required",
-        sessionToken,
-        user: {
+      
+      const activeDeviceCount = deviceQuery[0].count;
+      const is2FAEnabled = !userQuery[0].Disable2FA && activeDeviceCount > 0;
+      
+      if (!userQuery[0].Disable2FA && activeDeviceCount === 0) {
+        log("INFO", `Auto-disabling 2FA for user ${username} - no active devices`, {
           username,
-          id: userIdInt,
+          userIdInt,
+          activeDeviceCount
+        });
+        
+        await databaseManager.query(
+          "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 1 WHERE TwoFactorUserID = ?",
+          [userIdInt]
+        );
+      }
+
+      log("INFO", `User 2FA status - HasRecord: ${has2FARecord}, Enabled: ${is2FAEnabled}, ActiveDevices: ${activeDeviceCount}`);
+
+      if (is2FAEnabled) {
+        
+        // user has 2FA enabled AND has active devices
+        log("INFO", `Processing 2FA-enabled user: ${username}`);
+
+        const deviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser");
+        const sessionToken = uuidv4();
+        
+        const sessionData = {
+          username,
+          userId: userIdInt,
+          originalPassword: password, 
+          loginTime: new Date().toISOString(),
           requires2FA: true,
-        },
-        nextStep: "verify_2fa",
-        d: {
-          ODataLocation: credentialsCheck.odataLocation || "odata_online",
-          requires2FA: true,
-          HasTwoFactor: true,
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent"),
+          deviceInfo: deviceInfo,
+          deviceId: null,
+          sessionType: "pending_2fa",
+        };
+
+        await databaseManager.query(
+          "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+          [sessionToken, username, JSON.stringify(sessionData)]
+        );
+
+        log("INFO", `2FA session created for user: ${username}`);
+
+        return res.json({
+          success: true,
+          message: "User has 2FA enabled - verification required",
           sessionToken,
-          SessionToken: sessionToken,
-          InactiveFlag: credentialsCheck.inactiveFlag || false,
-        },
-      });
-    } else if (has2FARecord && !is2FAEnabled) {
-
-      // user has 2FA disabled
-      log("INFO", `User has 2FA disabled: ${username}`);
-      return res.json({
-        success: true,
-        message: "User has 2FA disabled - use standard login",
-        d: {
-          ODataLocation: credentialsCheck.odataLocation || "odata_online",
-          requires2FA: false,
-          HasTwoFactor: false,
-          InactiveFlag: credentialsCheck.inactiveFlag || false,
-        },
-      });
+          user: {
+            username,
+            id: userIdInt,
+            requires2FA: true,
+          },
+          nextStep: "verify_2fa",
+          d: {
+            ODataLocation: credentialsCheck.odataLocation || "odata_online",
+            requires2FA: true,
+            HasTwoFactor: true,
+            sessionToken,
+            SessionToken: sessionToken,
+            InactiveFlag: credentialsCheck.inactiveFlag || false,
+          },
+        });
+      } else {
+        // user has 2FA disabled OR no active devices
+        log("INFO", `User has 2FA disabled or no active devices: ${username}`);
+        return res.json({
+          success: true,
+          message: "User has 2FA disabled - use standard login",
+          d: {
+            ODataLocation: credentialsCheck.odataLocation || "odata_online",
+            requires2FA: false,
+            HasTwoFactor: false,
+            InactiveFlag: credentialsCheck.inactiveFlag || false,
+          },
+        });
+      }
     } else {
-
       // user is not in 2FA system
       log("INFO", `User not in 2FA system: ${username}`);
       return res.json({
@@ -832,7 +852,6 @@ router.post("/auth/setup-2fa", async (req, res) => {
     const { username, password, deviceInfo = "Web Browser" } = req.body;
 
     if (!username || !password) {
-      console.log("❌ [DEBUG] Missing username or password");
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -847,15 +866,11 @@ router.post("/auth/setup-2fa", async (req, res) => {
       "SELECT TwoFactorUserID, Disable2FA FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
     );
-    console.log("🔧 [DEBUG] User check result:", userCheck);
 
     const has2FAActive = userCheck.length > 0 && !userCheck[0].Disable2FA;
 
     // Verify credentials first
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password, has2FAActive);
-
-    console.log("🔧 [DEBUG] Credentials check result:", credentialsCheck);
-
 
     if (!credentialsCheck.success) {
       return res.status(401).json({
@@ -869,13 +884,10 @@ router.post("/auth/setup-2fa", async (req, res) => {
     await databaseManager.query("BEGIN TRANSACTION");
 
     try {
-      
-    
 
     // Ensure user exists in TwoFactorUser table for first setup
     let user = await getTwoFactorUser(username);
     if (!user) {
-      console.log(`🔧 Creating new TwoFactorUser record for: ${username}`);
       
       await databaseManager.query(
         `INSERT INTO appblddbo.TwoFactorUser (LoginName, LoginPassword, DBPassword, ValidUntilUTC, TokenLifetime, Disable2FA) 
@@ -905,16 +917,16 @@ router.post("/auth/setup-2fa", async (req, res) => {
       throw error;
     }
 
-    // 3. Generate TOTP secret 
+    // Generate TOTP secret 
     const totpData = await totpService.generateTOTP(username);
 
-    // 4. Enhanced device info detection
+    // Enhanced device info detection
     const enhancedDeviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), deviceInfo);
 
-    // 5. Create temporary session token for this setup
+    // Create temporary session token for this setup
     const sessionToken = uuidv4();
 
-    // 6. Store the setup data temporarily (NOT in database)
+    // Store the setup data temporarily (NOT in database)
     const setupData = {
       username,
       password, 
@@ -931,7 +943,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
       deviceInfo: enhancedDeviceInfo,
     });
 
-    // 7. Return QR code and session token for verification
+    // Return QR code and session token for verification
     res.status(200).json({
       success: true,
       message: "2FA setup initiated - scan QR code and verify",
@@ -943,7 +955,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
         qrCodeData: totpData.uri,
       },
       instructions: [
-        "1. Open your authenticator app (Google Authenticator, Authy, etc.)",
+        "1. Open your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)",
         "2. Scan the QR code or enter the secret manually",
         "3. Enter the 6-digit code below to verify",
         "4. Device will be added to your account only after successful verification",
@@ -1297,7 +1309,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
       });
     }
 
-    // 1. Verify credentials first
+    // Verify credentials first
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password, 0);
     if (!credentialsCheck.success) {
       return res.status(401).json({
@@ -1307,7 +1319,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
       });
     }
 
-    // STEP 2: Get 2FA status
+    // Get 2FA status
     const userQuery = await databaseManager.query(
       "SELECT * FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
       [username]
@@ -1342,20 +1354,38 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
       [username]
     );
 
+    const activeDeviceCount = deviceQuery[0].count;
+
+    const is2FAEnabled = !user.Disable2FA && activeDeviceCount > 0;
+
+    // ✅ Optional: Auto-cleanup orphaned 2FA records with no devices
+    if (!user.Disable2FA && activeDeviceCount === 0) {
+      log("INFO", `Auto-disabling 2FA for user ${username} - no active devices`, {
+        username,
+        userIdInt,
+        activeDeviceCount
+      });
+
+      await databaseManager.query(
+        "UPDATE appblddbo.TwoFactorUser SET Disable2FA = 1 WHERE TwoFactorUserID = ?",
+        [userIdInt]
+      );
+    }
+
+
     res.json({
       success: true,
       message: "User status retrieved",
       username,
       exists: true,
       id: userIdInt,
-      is2FAEnabled: !user.Disable2FA,
-      totalDevices: deviceQuery[0].count,
-      activeDevices: deviceQuery[0].count,
+      is2FAEnabled: is2FAEnabled,
+      totalDevices: activeDeviceCount,
+      activeDevices: activeDeviceCount,
       activeSessions: sessionQuery[0].count,
       hasDBPassword: !!user.DBPassword,
       credentialsValid: true
     });
-
   } catch (error) {
     log("ERROR", "Status check error", {
       username: req.body.username,
