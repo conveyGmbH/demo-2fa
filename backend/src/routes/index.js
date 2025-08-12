@@ -4,19 +4,28 @@ const QRCode = require("qrcode");
 const { v4: uuidv4 } = require("uuid");
 const databaseManager = require("../config/database");
 
-const router = express.Router();
+// Load environment variables from .env file
+//require('dotenv').config();
 
+const router = express.Router();
 
 // CONFIGURATION
 const CONFIG = {
   totp: {
-    issuer: "LeadSuccess",
-    serviceName: "LeadSuccess Portal",
+    issuer: (process.env.TOTP_ISSUER ? process.env.TOTP_ISSUER : "convey LeadSuccess"),
+    serviceName: (process.env.TOTP_LABEL ? process.env.TOTP_LABEL : "LeadSuccess Portal"),
+    digits: Number(process.env.TOTP_DIGITS) ? Number(process.env.TOTP_DIGITS) : 6,
+    step: Number(process.env.TOTP_PERIOD) ? Number(process.env.TOTP_PERIOD) : 30,
+    window: Number(process.env.TOTP_WINDOW) ? Number(process.env.TOTP_WINDOW) : 2,
+    algorithm: (process.env.TOTP_ALGORITHM ? process.env.TOTP_ALGORITHM : 'sha1'),
+    secretLength: Number(process.env.TOTP_SIZE) ? Number(process.env.TOTP_SIZE) : 32,
+//    issuer: "convey LeadSuccess",
+/*    serviceName: "LeadSuccess Portal",
     digits: 6,
     step: 30,
     window: 2,
-    algorithm: "sha1",
-    secretLength: 32,
+    algorithm: 'sha1',
+    secretLength: 32,*/
   },
   session: {
     replayProtectionTTL: 5 * 60 * 1000,

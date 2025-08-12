@@ -19,8 +19,8 @@ if the modult is installed in c:\convey\services. This should be fixed some time
 	* DB_UID, contains the database user, usually TFModule
     * DB_PWD, contains the password to access the database
 	* DB_DSN, contains the ODBC datasource name
-	* TOTP_LABEL, usually "Leadsuccess DEIMOS" for Development, "Leadsuccess LSTEST" for Test/staging
-      and "Leadsuccess Portal" for production environment
+	* TOTP_ISSUER, usually "convey LeadSuccess DEIMOS" for Development, "convey LeadSuccess LSTEST" for Test/staging
+      and "convey LeadSuccess Portal" for production environment
 	* NODE_ENV, set to "production" or "development"
 * Install and start the Windows service by executing "node install-service.js" in backend\src\config
 * Uninstall service by executing "node uninstall-service.js" in backend\src\config
