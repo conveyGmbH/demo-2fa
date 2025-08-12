@@ -77,7 +77,7 @@ class Server {
         const allowedOrigins = [
           // Production URLs
           "https://deimos.convey.de",
-
+          "https://lstest.convey.de",
           // Dev URLs
           "http://localhost:51170",
           "http://localhost:51171",
