@@ -12,12 +12,13 @@ Clone the project from [https://github.com/conveyGmbH/demo-2fa.git], usually int
 
 ### Backend
 
-* Create an environment file ".env" in backend.src (ToDo: Template?), with special notice to
+* Create an environment file ".env" in backend/src using .env.template, with special notice to
 	* DB_UID, contains the database user, usually TFModule
     * DB_PWD, contains the password to access the database
 	* DB_DSN, contains the ODBC datasource name
-	* TOTP_LABEL, usually "Leadsuccess DEIMOS" for Development, "Leadsuccess LSTEST" for Test 
+	* TOTP_LABEL, usually "Leadsuccess DEIMOS" for Development, "Leadsuccess LSTEST" for Test/staging
       and "Leadsuccess Portal" for production environment
+	* NODE_ENV, set to "production" or "development"
 * Install and start the Windows service by executing "node install-service.js" in backend\src\config
 
 Something else?
