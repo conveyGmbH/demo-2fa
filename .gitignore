@@ -7,11 +7,13 @@
 Thumbs.db
 .env
 
+# package-lock wird beim Install erzeugt bzw. geändert
+package-lock.json
+
 #  Dependency directories 
 node_modules/
 vendor/
-frontend/node_modules/
-backend/node_modules/
+daemon/
 
 #  Build and dist folders 
 dist/
