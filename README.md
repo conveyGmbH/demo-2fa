@@ -8,7 +8,10 @@ Currently it only supports TOTP authentication, but FIDO-Stick / Passkey are pla
 
 ## Installation
 
-Clone the project from [https://github.com/conveyGmbH/demo-2fa.git], usually into c:\convey\Services
+Clone the project from https://github.com/conveyGmbH/demo-2fa.git, usually into c:\convey\Services. 
+
+**Note:** Currently the install and uninstall scripts contain absolute pathnames and work only
+if the modult is installed in c:\convey\services. This should be fixed some time in the future...
 
 ### Backend
 
@@ -20,9 +23,8 @@ Clone the project from [https://github.com/conveyGmbH/demo-2fa.git], usually int
       and "Leadsuccess Portal" for production environment
 	* NODE_ENV, set to "production" or "development"
 * Install and start the Windows service by executing "node install-service.js" in backend\src\config
-
-Something else?
+* Uninstall service by executing "node uninstall-service.js" in backend\src\config
 
 ### Frontend
 
-ToDo... 
+Nothing to do?
