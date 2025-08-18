@@ -1,9 +1,5 @@
-// Backend/src/utils/logger.js - FIXED VERSION
-
-/**
- * Logger utility for LeadSuccess 2FA system
- * Provides structured logging with multiple transports
- */
+// Logger utility for LeadSuccess 2FA system
+// Provides structured logging with multiple transports
 
 const fs = require('fs');
 const path = require('path');
@@ -15,9 +11,7 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-/**
- * Log levels with colors and priorities
- */
+// Log levels with colors and priorities
 const LOG_LEVELS = {
   ERROR: { priority: 0, color: '\x1b[31m', emoji: '❌' },
   WARN: { priority: 1, color: '\x1b[33m', emoji: '⚠️' },
@@ -26,9 +20,8 @@ const LOG_LEVELS = {
   TRACE: { priority: 4, color: '\x1b[35m', emoji: '📝' }
 };
 
-/**
- * Logger configuration
- */
+// Logger configuration
+ 
 const config = {
   level: (process.env.LOG_LEVEL || 'INFO').toUpperCase(), 
   enableConsole: process.env.NODE_ENV !== 'test',
@@ -38,15 +31,13 @@ const config = {
   sanitize: process.env.NODE_ENV === 'production'
 };
 
-/**
- * Validate and normalize log level
- */
+// Validate and normalize log level 
 function validateLogLevel(level) {
   const normalizedLevel = (level || 'INFO').toUpperCase();
   
   // If the level doesn't exist, default to INFO
   if (!LOG_LEVELS[normalizedLevel]) {
-    console.warn(`⚠️  Invalid log level "${level}", defaulting to INFO`);
+    console.warn(`Invalid log level "${level}", defaulting to INFO`);
     return 'INFO';
   }
   
@@ -56,36 +47,28 @@ function validateLogLevel(level) {
 // Apply validation to config
 config.level = validateLogLevel(config.level);
 
-/**
- * Logger class
- */
+// Logger class
 class Logger {
   constructor(name = 'LeadSuccess2FA') {
     this.name = name;
     this.streams = [];
     
-    // Console stream
     if (config.enableConsole) {
       this.streams.push(this.consoleStream.bind(this));
     }
-    
-    // File stream
+
     if (config.enableFile) {
       this.setupFileStream();
     }
   }
 
-  /**
-   * Get current timestamp
-   */
+  // Get current timestamp
   getTimestamp() {
     const now = new Date();
     return now.toISOString();
   }
 
-  /**
-   * Format log message
-   */
+  // Format log message
   formatMessage(level, message, data) {
     const timestamp = this.getTimestamp();
     const levelInfo = LOG_LEVELS[level];
@@ -101,9 +84,7 @@ class Logger {
     return formatted;
   }
 
-  /**
-   * Sanitize sensitive data
-   */
+  // Sanitize sensitive data
   sanitizeData(data) {
     if (!config.sanitize) return data;
     
@@ -130,9 +111,7 @@ class Logger {
     return sanitized;
   }
 
-  /**
-   * Console stream
-   */
+  // Console stream
   consoleStream(level, message, data) {
     const levelInfo = LOG_LEVELS[level];
     const timestamp = this.getTimestamp();
@@ -140,9 +119,7 @@ class Logger {
     // Colorful console output
     const prefix = `${levelInfo.color}[${timestamp}] ${levelInfo.emoji} ${level}${'\x1b[0m'}`;
     const logMessage = `${prefix} [${this.name}] ${message}`;
-    
-    console.log(logMessage);
-    
+
     if (data && Object.keys(data).length > 0) {
       console.log(util.inspect(data, { 
         colors: true, 
@@ -152,9 +129,7 @@ class Logger {
     }
   }
 
-  /**
-   * Setup file stream with rotation
-   */
+  // Setup file stream with rotation   
   setupFileStream() {
     const logFile = path.join(logsDir, `app-${new Date().toISOString().split('T')[0]}.log`);
     
@@ -168,12 +143,10 @@ class Logger {
           this.rotateLogFile();
         }
       });
-    }, 60000); // Check every minute
+    }, 60000);
   }
 
-  /**
-   * Write to file stream
-   */
+  // Write to file stream   
   writeToFile(level, message, data) {
     if (!this.fileStream) return;
     
@@ -183,9 +156,7 @@ class Logger {
     this.fileStream.write(logLine);
   }
 
-  /**
-   * Rotate log file
-   */
+  // Rotate log file   
   rotateLogFile() {
     if (!this.fileStream) return;
     
@@ -199,9 +170,7 @@ class Logger {
     this.setupFileStream();
   }
 
-  /**
-   *  Check if level should be logged with proper validation
-   */
+  //  Check if level should be logged with proper validation
   shouldLog(level) {
     // Normalize and validate the incoming level
     const normalizedLevel = validateLogLevel(level);
@@ -213,11 +182,9 @@ class Logger {
     return messagePriority <= currentPriority;
   }
 
-  /**
-   *  Main logging method with level validation
-   */
+  // Main logging method with level validation
+  
   log(level, message, data = null) {
-    // Normalize level to uppercase
     const normalizedLevel = validateLogLevel(level);
     
     if (!this.shouldLog(normalizedLevel)) return;
@@ -238,10 +205,8 @@ class Logger {
   debug(message, data) { this.log('DEBUG', message, data); }
   trace(message, data) { this.log('TRACE', message, data); }
 
-  /**
-   * Log HTTP request
-   */
-  logRequest(req, res, duration) {
+  //Log HTTP request
+logRequest(req, res, duration) {
     const data = {
       method: req.method,
       url: req.originalUrl,
@@ -256,9 +221,7 @@ class Logger {
     this.log(level, `${req.method} ${req.originalUrl} - ${res.statusCode}`, data);
   }
 
-  /**
-   * Create child logger
-   */
+  // Create child logger
   child(name) {
     return new Logger(`${this.name}:${name}`);
   }
@@ -267,10 +230,8 @@ class Logger {
 // Create default logger instance
 const defaultLogger = new Logger();
 
-/**
- * Express middleware for request logging
- */
-const requestLogger = (req, res, next) => {
+// Express middleware for request logging
+ const requestLogger = (req, res, next) => {
   const start = Date.now();
   
   // Log response when finished
@@ -282,9 +243,7 @@ const requestLogger = (req, res, next) => {
   next();
 };
 
-/**
- * Error logger middleware
- */
+// Error logger middleware
 const errorLogger = (err, req, res, next) => {
   defaultLogger.error('Unhandled error', {
     error: {

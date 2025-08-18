@@ -1,4 +1,3 @@
-// Backend/src/config/config.js 
 
 // Load environment variables from .env file
 require('dotenv').config();

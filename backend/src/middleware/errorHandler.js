@@ -1,15 +1,13 @@
-// Backend/src/middleware/errorHandler.js
 
-/**
+/*
  * Error handling middleware for LeadSuccess 2FA API
  * Provides consistent error responses and logging
  */
 
 const logger = require('../utils/logger');
 
-/**
- * Custom API Error class
- */
+// Custom API Error class
+ 
 class ApiError extends Error {
   constructor(statusCode, message, details = null) {
     super(message);
@@ -28,17 +26,13 @@ const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-/**
- * 404 Not Found handler
- */
+// 404 Not Found handler
 const notFoundHandler = (req, res, next) => {
   const error = new ApiError(404, `Route not found: ${req.method} ${req.originalUrl}`);
   next(error);
 };
 
-/**
- * Main error handling middleware
- */
+// Main error handling middleware 
 const errorHandler = (err, req, res, next) => {
   // Default to 500 server error
   let statusCode = err.statusCode || 500;
@@ -71,7 +65,7 @@ const errorHandler = (err, req, res, next) => {
     }
   } else {
     // Development - log to console with full details
-    console.error('🔥 API Error:', errorLog);
+    console.error(' API Error:', errorLog);
   }
 
   // Special handling for specific error types
@@ -107,10 +101,8 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-/**
- * Database error handler
- * Transforms database errors into user-friendly messages
- */
+// Database error handler
+
 const handleDatabaseError = (error) => {
   const dbErrors = {
     'ER_DUP_ENTRY': { status: 409, message: 'Duplicate entry found' },
@@ -146,9 +138,7 @@ const formatValidationError = (errors) => {
   return formatted;
 };
 
-/**
- * Request timeout handler
- */
+// Request timeout handler
 const timeoutHandler = (timeout = 30000) => {
   return (req, res, next) => {
     const timer = setTimeout(() => {
@@ -163,9 +153,7 @@ const timeoutHandler = (timeout = 30000) => {
   };
 };
 
-/**
- * CORS error handler
- */
+// CORS error handler 
 const corsErrorHandler = (err, req, res, next) => {
   if (err && err.message === 'Not allowed by CORS') {
     return res.status(403).json({
@@ -182,9 +170,8 @@ const corsErrorHandler = (err, req, res, next) => {
   next(err);
 };
 
-/**
- * Rate limit error handler
- */
+// Rate limit error handler
+ 
 const rateLimitHandler = (req, res) => {
   res.status(429).json({
     success: false,

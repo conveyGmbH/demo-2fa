@@ -8,19 +8,15 @@ const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 const logger = require("./utils/logger");
 const config = require("./config/config.js");
 
-// Load environment variables from .env file
+// load environment variables from .env file
 require("dotenv").config();
 
-console.log("🚀 Starting server...");
-
-// Import routes with error handling
 let routes;
 try {
   routes = require("./routes");
   console.log("Routes imported successfully");
 } catch (error) {
   console.error("Error importing routes:", error.message);
-  console.log("Server will start without routes - check routes/index.js");
 }
 
 class Server {
@@ -28,16 +24,7 @@ class Server {
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
-    this.app.use((err, req, res, next) => {
-    console.log('🔥 PARSING ERROR:', {
-        error: err.message,
-        stack: err.stack,
-        body: req.body,
-        headers: req.headers,
-        method: req.method,
-        url: req.url
-    });
-    
+    this.app.use((err, req, res, next) => {    
     if (err.type === 'entity.parse.failed') {
         return res.status(400).json({
             success: false,
@@ -45,40 +32,26 @@ class Server {
             error: err.message
         });
     }
-    
     next(err);
 });
     this.setupErrorHandling();
   }
 
   setupMiddleware() {
-    console.log("🔧 Setting up middleware...");
 
     this.app.use(helmet());
-
-    this.app.use((req, res, next) => {
-      console.log("🔍 DEBUG REQUEST:", {
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        contentType: req.get("Content-Type"),
-        body: req.body,
-        rawBody: req.body ? JSON.stringify(req.body) : "NO BODY",
-        timestamp: new Date().toISOString(),
-      });
-      next();
-    });
 
     const corsOptions = {
       origin: function (origin, callback) {
         if (!origin) return callback(null, true);
 
-        // List of allowed origins
+        // list of allowed origins
         const allowedOrigins = [
-          // Production URLs
+          // production URLs
           "https://deimos.convey.de",
           "https://lstest.convey.de",
-          // Dev URLs
+
+          // dev URLs
           "http://localhost:51170",
           "http://localhost:51171",
           "http://localhost:4000",
@@ -86,10 +59,7 @@ class Server {
 
         // In development, allow all localhost origins
         if (process.env.NODE_ENV !== "production") {
-          if (
-            origin.startsWith("http://localhost:") ||
-            origin.startsWith("http://127.0.0.1:")
-          ) {
+          if (origin.startsWith("http://localhost:") ||origin.startsWith("http://127.0.0.1:")) {
             return callback(null, true);
           }
         }
@@ -98,7 +68,6 @@ class Server {
         if (allowedOrigins.indexOf(origin) !== -1) {
           callback(null, true);
         } else {
-          console.log(`CORS: Origin not allowed: ${origin}`);
           callback(new Error("Not allowed by CORS"));
         }
       },
@@ -116,19 +85,9 @@ class Server {
     this.app.use(cors(corsOptions));
 
     this.app.use(compression());
-    // this.app.use(express.json({ type: 'application/json', limit: '10mb' }));
-    this.app.use(
-      express.json({
+    this.app.use(express.json({
         type: ["application/json", "text/plain"],
         limit: "10mb",
-        verify: (req, res, buf, encoding) => {
-          console.log("🔍 JSON PARSING:", {
-            contentType: req.get("Content-Type"),
-            contentLength: req.get("Content-Length"),
-            bufferLength: buf.length,
-            encoding: encoding,
-          });
-        },
       })
     );
 
@@ -146,9 +105,7 @@ class Server {
   }
 
   setupRoutes() {
-    console.log("Setting up routes...");
-
-    // Root endpoint
+    // root endpoint
     this.app.get("/", (req, res) => {
       res.json({
         success: true,
@@ -166,83 +123,53 @@ class Server {
       });
     });
 
-    // CORS test endpoint
-    this.app.get("/cors-test", (req, res) => {
-      res.json({
-        success: true,
-        message: "CORS is working correctly",
-        origin: req.get("Origin"),
-        timestamp: new Date().toISOString(),
-      });
-    });
-
     // Mount API routes if available
     if (routes) {
-      this.app.use("/api/v1", routes);
-      console.log("✅ API routes mounted on /api/v1");
+      this.app.use("/api/v1", routes);     
     } else {
       // Fallback endpoint if routes failed to load
       this.app.get("/api/v1", (req, res) => {
         res.json({
           success: false,
-          message: "Routes not loaded - check server logs",
+          message: "Routes not loaded",
           timestamp: new Date().toISOString(),
         });
       });
-      console.log("⚠️ Routes not mounted - using fallback");
+      console.log("Routes not mounted - using fallback");
     }
   }
-    
 
   setupErrorHandling() {
-    console.log("🛡️ Setting up error handling...");
     this.app.use(notFoundHandler);
     this.app.use(errorHandler);
-    console.log("✅ Error handling setup complete");
   }
 
   async start() {
     try {
-      console.log("🔌 Connecting to the database...");
+    
       await databaseManager.connect();
-      console.log("✅ Database connected");
+      console.log(" Database connected");
 
       const port = process.env.PORT || 4000;
-      console.log("Starting server on port:", port);
 
       this.app.listen(port, () => {
         logger.info(`Server listening on port ${port}`);
-
-        console.log("");
         console.log(" SERVER READY!");
-        console.log(` Server: http://localhost:${port}`);
-        console.log(` Root: http://localhost:${port}/`);
-        console.log(` Health: http://localhost:${port}/api/v1/health`);
-        console.log(` DB Test: http://localhost:${port}/api/v1/test-db`);
-        console.log(` CORS Test: http://localhost:${port}/cors-test`);
-        console.log("");
-        console.log("📋 Available endpoints:");
+        
         if (routes) {
-          console.log("   GET  /api/v1/health - Health check");
-          console.log("   GET  /api/v1/test-db - Database test");
-          console.log("   GET  /api/v1/tables - Show all tables overview");
+          console.log("GET  /api/v1/health - Health check");
+          console.log("GET  /api/v1/test-db - Database test");
+          console.log("GET  /api/v1/tables - Show all tables overview");
 
-          console.log("   POST /api/v1/auth/login - User login");
-          console.log("   POST /api/v1/auth/setup-2fa - Setup 2FA");
-          console.log("   POST /api/v1/auth/verify-2fa - Verify 2FA");
-          console.log("   POST /api/v1/auth/disable-2fa - Disable 2FA");
-          console.log("   POST /api/v1/auth/status - User status");
+          console.log("POST /api/v1/auth/login - User login");
+          console.log("POST /api/v1/auth/setup-2fa - Setup 2FA");
+          console.log("POST /api/v1/auth/verify-2fa - Verify 2FA");
+          console.log("POST /api/v1/auth/disable-2fa - Disable 2FA");
+          console.log("POST /api/v1/auth/status - User status");
         } else {
-          console.log("⚠️ No routes loaded - check routes/index.js");
+          console.log("No routes loaded - check routes/index.js");
         }
-        console.log("");
-        console.log("🔒 CORS Configuration:");
-        console.log("   ✅ Development: All localhost ports allowed");
-        console.log("   ✅ Credentials: Enabled");
-        console.log(
-          "   ✅ Headers: Content-Type, Authorization, X-Session-Token"
-        );
-        console.log("");
+
       });
     } catch (error) {
       console.error("❌ Failed to start server:", error);
@@ -258,7 +185,7 @@ class Server {
     const server = new Server();
     await server.start();
   } catch (err) {
-    console.error("🔥 Fatal error starting server:", err);
+    console.error("error starting server:", err);
     process.exit(1);
   }
 })();

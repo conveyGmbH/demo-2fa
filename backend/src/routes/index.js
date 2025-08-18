@@ -370,7 +370,7 @@ class TOTPService {
       }
     }
 
-    const setupTTL = 10 * 60 * 1000; // 10 minutes
+    const setupTTL = 10 * 60 * 1000; 
     let expiredSetups = 0;
     for (const [sessionToken, setup] of this.pendingSetups) {
       if (now - setup.timestamp > setupTTL) {
@@ -388,7 +388,6 @@ class TOTPService {
 const totpService = new TOTPService();
 
 // HELPER FUNCTIONS
-
 async function getTwoFactorUser(username) {
   try {
     const existingUser = await databaseManager.query(
@@ -702,8 +701,6 @@ router.post("/auth/check-credentials", async (req, res) => {
   }
 });
 
-// login endpoint
-
 //login endpoint
 router.post("/auth/login", async (req, res) => {
   try {
@@ -767,9 +764,6 @@ router.post("/auth/login", async (req, res) => {
       log("INFO", `User 2FA status - HasRecord: ${has2FARecord}, Enabled: ${is2FAEnabled}, ActiveDevices: ${activeDeviceCount}`);
 
       if (is2FAEnabled) {
-        
-        // user has 2FA enabled AND has active devices
-        log("INFO", `Processing 2FA-enabled user: ${username}`);
 
         const deviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser");
         const sessionToken = uuidv4();
@@ -791,8 +785,6 @@ router.post("/auth/login", async (req, res) => {
           "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
           [sessionToken, username, JSON.stringify(sessionData)]
         );
-
-        log("INFO", `2FA session created for user: ${username}`);
 
         return res.json({
           success: true,
@@ -935,7 +927,6 @@ router.post("/auth/setup-2fa", async (req, res) => {
     // Create temporary session token for this setup
     const sessionToken = uuidv4();
 
-    // Store the setup data temporarily (NOT in database)
     const setupData = {
       username,
       password, 
@@ -1367,7 +1358,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
 
     const is2FAEnabled = !user.Disable2FA && activeDeviceCount > 0;
 
-    // ✅ Optional: Auto-cleanup orphaned 2FA records with no devices
+    // Optional: Auto-cleanup orphaned 2FA records with no devices
     if (!user.Disable2FA && activeDeviceCount === 0) {
       log("INFO", `Auto-disabling 2FA for user ${username} - no active devices`, {
         username,
@@ -1976,7 +1967,7 @@ router.post("/devices/remove", async (req, res) => {
 
             const originalPassword = result.data.DBPassword;
 
-              log("INFO", `✅ PRC_Disable2FADevice returned original password`, {
+              log("INFO", `PRC_Disable2FADevice returned original password`, {
                 username,
                 deviceId: deviceIdInt,
                 passwordLength: originalPassword?.length || 0,

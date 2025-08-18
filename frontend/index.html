@@ -1338,10 +1338,8 @@
 
 
                     setTimeout(async () => {
-                        console.log('🔄 Force reloading devices and sessions...');
                         await loadDevices();
                         await loadSessions();
-                        console.log('✅ All data reloaded successfully');
                     }, 500);
 
                     // Show success message
