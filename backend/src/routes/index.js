@@ -67,7 +67,7 @@ function log(level, message, data = null) {
 
 // SECURITY VERIFICATION FUNCTION
 
-//fallback vers authentification par credentials
+// fallback vers authentification par credentials
 async function authenticateSession(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -156,7 +156,7 @@ async function verifyCredentialsForEndpoint(username, password, strict = 0) {
 
     const authResult = result[0];
     
-    if (authResult.ResultCode === 0) {
+    if (authResult.ResultCode === 0 || authResult.ResultCode === 1330)  {
       return {
         success: true,
         message: "Credentials valid",
