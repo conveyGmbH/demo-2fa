@@ -188,7 +188,7 @@ const databaseManager = {
         } catch (error) {
             console.error(getDateString(), ' Database query error:', JSON.stringify(error));
 			if (error.odbcErrors && error.odbcErrors[0] && 
-			    (error.odbcErrors[0].code == -308 || error.odbcErrors[0].code == -660)) {
+			    ([-660, -308, -85].includes(error.odbcErrors[0].code))) {
 				console.error('Retrying once...');
 				try {
 					await databaseManager.close();
