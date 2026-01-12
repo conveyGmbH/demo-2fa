@@ -1,4 +1,5 @@
 var Service = require('node-windows').Service;
+const path = require('path');
 var inUninstall = false;
 
 // ToDo: Make pathes relative...
@@ -6,7 +7,7 @@ var inUninstall = false;
 // Create a new service object
 var svc = new Service({
   name: "convey 2FA Backend Service",
-  script: "C:\\convey\\Services\\demo-2fa\\backend\\src\\server.js",
+  script: path.resolve(__dirname, '..\\')+'\\server.js',
 });
 
 svc.on("stop", function () {
