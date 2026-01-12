@@ -69,7 +69,7 @@ class Server {
         if (allowedOrigins.indexOf(origin) !== -1) {
           callback(null, true);
         } else {
-          callback(new Error("Origin "+origin+"Not allowed by CORS"));
+          callback(new Error("Origin "+origin+" not allowed by CORS"));
         }
       },
       credentials: true,
