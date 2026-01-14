@@ -653,14 +653,13 @@ router.post("/auth/check-credentials", async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    log("INFO", `Checking credentials for user: ${username}`);
     if (!username || !password) {
       return res.status(400).json({
         success: false,
         message: "Username and password required",
       });
     }
-
-    log("INFO", `Checking credentials for user: ${username}`);
 
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
     
@@ -707,6 +706,7 @@ router.post("/auth/login", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -853,6 +853,7 @@ router.post("/auth/setup-2fa", async (req, res) => {
     const { username, password, deviceInfo = "Web Browser" } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -995,22 +996,34 @@ router.post("/auth/verify-2fa", async (req, res) => {
     const { sessionToken, totpCode, username } = req.body;
 
     if (!totpCode) {
+      log("WARN", `TOTP code not provided`);
       return res.status(400).json({
         success: false,
         message: "TOTP code required",
       });
     }
 
-     if (!username) {
+    if (!username) {
+      log("WARN", `username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username required for verification",
       });
     }
 
-    const pendingSetup = sessionToken ? totpService.getPendingSetup(sessionToken) : null;
+    if (!sessionToken) {
+      log("WARN", `sessionToken not provided`);
+      return res.status(400).json({
+        success: false,
+        message: "Session token required for verification",
+      });
+    }
+
+    const pendingSetup = totpService.getPendingSetup(sessionToken);
 
     if (!pendingSetup && !username) {
+	  // Cannot happen, username is checked above, but anyway
+      log("WARN", `No username and no pending setup`);
       return res.status(400).json({
         success: false,
         message: "Username required for verification",
@@ -1028,6 +1041,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
       if (deviceName) {
         const trimmedDeviceName = deviceName.trim();
         if (trimmedDeviceName.length < 3 || trimmedDeviceName.length > 50) {
+		  log("WARN", `Invalid device name "${trimmedDeviceName}"`);
           return res.status(400).json({
             success: false,
             message: "Device name must be between 3 and 50 characters",
@@ -1043,6 +1057,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
       );
 
       if (!verification.success) {
+		log("WARN", `Invalid TOTP code "${totpCode}"`);
         return res.status(401).json({
           success: false,
           message: verification.error || "Invalid TOTP code",
@@ -1067,6 +1082,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
           user = await getTwoFactorUser(pendingSetup.username);
           if (!user) {
             await databaseManager.query("ROLLBACK TRANSACTION");
+			log("ERROR", "Failed to create 2FA user record during verification");
             return res.status(500).json({
               success: false,
               message: "Failed to create 2FA user record during verification"
@@ -1076,6 +1092,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
 
         const userIdInt = parseInt(user.TwoFactorUserID);
         if (isNaN(userIdInt)) {
+		  // catch does its own logging...
           throw new Error(`Invalid TwoFactorUserID: ${user.TwoFactorUserID}`);
         }
 
@@ -1112,6 +1129,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
         
         if (!result.success) {
           await databaseManager.query("ROLLBACK TRANSACTION");
+		  log("ERROR", "PRC_ActivateTwoFactor failed");
           return res.status(400).json({
             success: false,
             message: result.message,
@@ -1189,6 +1207,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
         );
 
         if (latestSession.length === 0) {
+		  log("WARN", `No active session found for user ${username}`);
           return res.status(401).json({
             success: false,
             message: "No active session found for user",
@@ -1209,6 +1228,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
       );
 
       if (sessionQuery.length === 0) {
+		log("INFO", "Invalid or expired session", { sessionToken: sessionTokenToUse } );
         return res.status(401).json({
           success: false,
           message: "Invalid or expired session",
@@ -1221,6 +1241,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
 
       const userIdInt = userId ? parseInt(userId) : null;
       if (!userIdInt) {
+		log("ERROR", "Invalid session data", sessionData);
         return res.status(400).json({
           success: false,
           message: "Invalid session data",
@@ -1229,6 +1250,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
 
       // Verify TOTP code
       const verificationResult = await totpService.verifyTOTP(userIdInt, totpCode);
+	  log("WARN", "TOTP code does not match");
       if (!verificationResult.success) {
         return res.status(401).json({
           success: false,
@@ -1261,6 +1283,7 @@ router.post("/auth/verify-2fa", async (req, res) => {
         const result = formatProcedureResult(activationResult, "PRC_ActivateTwoFactor");
         
         if (!result.success) {
+		  log("ERROR", `PRC_ActivateTwoFactor failed for ${sessionUsername}`);
           return res.status(400).json({
             success: false,
             message: result.message,
@@ -1302,7 +1325,9 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    log("TRACE", `Status called for user ${username}`);
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -1312,6 +1337,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
     // Verify credentials first
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password, 0);
     if (!credentialsCheck.success) {
+      log("WARN", `Credentials check failed for user ${username}`);
       return res.status(401).json({
         success: false,
         message: credentialsCheck.message,
@@ -1326,6 +1352,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
     );
 
     if (userQuery.length === 0) {
+      log("TRACE", "Empty user query");
       return res.json({
         success: true,
         message: "User status retrieved",
@@ -1373,6 +1400,7 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
     }
 
 
+    log("TRACE", `status returned for user ${username}`);
     res.json({
       success: true,
       message: "User status retrieved",
@@ -1405,6 +1433,7 @@ router.post("/auth/disable-2fa", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -1512,6 +1541,7 @@ router.post("/auth/get-current-password", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -1554,6 +1584,7 @@ router.post("/devices/list", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
@@ -1650,6 +1681,7 @@ router.post("/devices/add", async (req, res) => {
     const { username, password, deviceInfo = "New Device" } = req.body;
 
     if (!username || !password) {
+      log("WARN", `Password or username not provided`);
       return res.status(400).json({
         success: false,
         message: "Username and password required",
