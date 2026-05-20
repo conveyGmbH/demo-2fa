@@ -8,14 +8,9 @@ Currently it only supports TOTP authentication, but FIDO-Stick / Passkey are pla
 
 ## Installation
 
-Clone the project from https://github.com/conveyGmbH/demo-2fa.git, usually into c:\convey\Services. 
-
-**Note:** Currently the install and uninstall scripts contain absolute pathnames and work only
-if the modult is installed in c:\convey\services. This should be fixed some time in the future...
-
-### Backend
-
-* Create an environment file ".env" in backend/src using .env.template, with special notice to
+* Clone the project from https://github.com/conveyGmbH/demo-2fa.git, usually into F:\convey\Services. 
+* In the backend\src call "npm install"
+* Create an environment file ".env" in backend using .env.template, with special notice to
 	* DB_UID, contains the database user, usually TFModule
     * DB_PWD, contains the password to access the database
 	* DB_DSN, contains the ODBC datasource name
@@ -25,6 +20,11 @@ if the modult is installed in c:\convey\services. This should be fixed some time
 * Install and start the Windows service by executing "node install-service.js" in backend\src\config
 * Uninstall service by executing "node uninstall-service.js" in backend\src\config
 
+**Note:** If the service should be moved/copied to another machine by copying the whole directory
+tree the "daemon" directory has to be deleted before installation! This is not the recommended procedure,
+we recommend to copy the ".env" file from the old server to a newly cloned directory.
+
+
 ### Frontend
 
-Nothing to do?
+The frontend directory is only used during development.

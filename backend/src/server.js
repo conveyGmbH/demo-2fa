@@ -52,6 +52,7 @@ class Server {
           // production URLs
           "https://deimos.convey.de",
           "https://lstest.convey.de",
+		  "https://leadsuccess.convey.de",
 
           // dev URLs
           "http://localhost:51170",
@@ -70,7 +71,7 @@ class Server {
         if (allowedOrigins.indexOf(origin) !== -1) {
           callback(null, true);
         } else {
-          callback(new Error("Not allowed by CORS"));
+          callback(new Error("Origin "+origin+" not allowed by CORS"));
         }
       },
       credentials: true,
