@@ -49,6 +49,13 @@ const config = {
         rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX) || 100
     },
 
+    // Google OAuth configuration
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/v1/auth/google/callback'
+    },
+
     // Logging configuration
     logging: {
         level: process.env.LOG_LEVEL || 'info',

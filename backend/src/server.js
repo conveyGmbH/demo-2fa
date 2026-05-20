@@ -39,7 +39,9 @@ class Server {
 
   setupMiddleware() {
 
-    this.app.use(helmet());
+    this.app.use(helmet({
+      contentSecurityPolicy: false,
+    }));
 
     const corsOptions = {
       origin: function (origin, callback) {
@@ -83,6 +85,7 @@ class Server {
     };
 
     this.app.use(cors(corsOptions));
+    this.app.options('*', cors(corsOptions));
 
     this.app.use(compression());
     this.app.use(express.json({
@@ -105,22 +108,14 @@ class Server {
   }
 
   setupRoutes() {
-    // root endpoint
+    // Serve frontend static files
+    const path = require("path");
+    const frontendPath = path.join(__dirname, "../../frontend");
+    this.app.use(express.static(frontendPath));
+
+    // root — serve index.html (handles /?token=xxx redirects from Google OAuth)
     this.app.get("/", (req, res) => {
-      res.json({
-        success: true,
-        message: "LeadSuccess 2FA Server",
-        timestamp: new Date().toISOString(),
-        status: "running",
-        api: "/api/v1",
-        cors: {
-          enabled: true,
-          development:
-            process.env.NODE_ENV !== "production"
-              ? "All localhost origins allowed"
-              : "Restricted origins only",
-        },
-      });
+      res.sendFile(path.join(frontendPath, "index.html"));
     });
 
     // Mount API routes if available
@@ -166,6 +161,9 @@ class Server {
           console.log("POST /api/v1/auth/verify-2fa - Verify 2FA");
           console.log("POST /api/v1/auth/disable-2fa - Disable 2FA");
           console.log("POST /api/v1/auth/status - User status");
+          console.log("GET  /api/v1/auth/google - Google OAuth start");
+          console.log("GET  /api/v1/auth/google/callback - Google OAuth callback");
+          console.log("GET  /api/v1/auth/google/status - Google OAuth status");
         } else {
           console.log("No routes loaded - check routes/index.js");
         }

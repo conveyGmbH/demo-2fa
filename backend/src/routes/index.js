@@ -2,10 +2,9 @@ const express = require("express");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
 const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const databaseManager = require("../config/database");
-
-// Load environment variables from .env file
-//require('dotenv').config();
+const config = require("../config/config");
 
 const router = express.Router();
 
@@ -19,13 +18,6 @@ const CONFIG = {
     window: Number(process.env.TOTP_WINDOW) ? Number(process.env.TOTP_WINDOW) : 2,
     algorithm: (process.env.TOTP_ALGORITHM ? process.env.TOTP_ALGORITHM : 'sha1'),
     secretLength: Number(process.env.TOTP_SIZE) ? Number(process.env.TOTP_SIZE) : 32,
-//    issuer: "convey LeadSuccess",
-/*    serviceName: "LeadSuccess Portal",
-    digits: 6,
-    step: 30,
-    window: 2,
-    algorithm: 'sha1',
-    secretLength: 32,*/
   },
   session: {
     replayProtectionTTL: 5 * 60 * 1000,
@@ -38,7 +30,6 @@ const CONFIG = {
 };
 
 
-// only for developemnt
 function log(level, message, data = null) {
   if (!CONFIG.logging.enabled) return;
 
@@ -71,9 +62,9 @@ function log(level, message, data = null) {
 async function authenticateSession(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    const sessionToken = authHeader && authHeader.startsWith('Bearer ') 
-      ? authHeader.slice(7) 
-      : req.body.sessionToken;
+    const sessionToken = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null)
+      || req.headers['x-session-token']
+      || req.body.sessionToken;
 
     if (sessionToken) {
       // check if the session token is valid
@@ -156,7 +147,7 @@ async function verifyCredentialsForEndpoint(username, password, strict = 0) {
 
     const authResult = result[0];
     
-    if (authResult.ResultCode === 0 || authResult.ResultCode === 1330)  {
+    if (Number(authResult.ResultCode) === 0 || Number(authResult.ResultCode) === 1330)  {
       return {
         success: true,
         message: "Credentials valid",
@@ -583,11 +574,7 @@ async function cleanupSessionsForDevice(username, deviceId) {
 }
 
 
-// API ROUTES - ALL POST WITH CREDENTIAL VERIFICATION
-
-router.use((req, res, next) => {
-  next();
-});
+// API ROUTES
 
 // API Information
 router.get("/", (req, res) => {
@@ -719,10 +706,11 @@ router.post("/auth/login", async (req, res) => {
     const credentialsCheck = await verifyCredentialsForEndpoint(username, password);
     
     if (!credentialsCheck.success) {
-      log("WARN", `Invalid credentials for user: ${username}`);
+      log("WARN", `Invalid credentials for user: ${username}`, { resultCode: credentialsCheck.resultCode, message: credentialsCheck.message });
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: credentialsCheck.message || "Invalid credentials",
+        resultCode: credentialsCheck.resultCode,
       });
     }
 
@@ -806,25 +794,63 @@ router.post("/auth/login", async (req, res) => {
           },
         });
       } else {
-        // user has 2FA disabled OR no active devices
+        // user has 2FA disabled OR no active devices — create authenticated session
         log("INFO", `User has 2FA disabled or no active devices: ${username}`);
+        const sessionToken = uuidv4();
+        const sessionData = {
+          username,
+          userId: userIdInt,
+          originalPassword: password,
+          loginTime: new Date().toISOString(),
+          requires2FA: false,
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent"),
+          deviceInfo: detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser"),
+          deviceId: null,
+          sessionType: "authenticated",
+          authenticated2FA: true,
+        };
+        await databaseManager.query(
+          "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+          [sessionToken, username, JSON.stringify(sessionData)]
+        );
         return res.json({
           success: true,
           message: "User has 2FA disabled - use standard login",
+          sessionToken,
           d: {
             ODataLocation: credentialsCheck.odataLocation || "odata_online",
             requires2FA: false,
             HasTwoFactor: false,
             InactiveFlag: credentialsCheck.inactiveFlag || false,
+            sessionToken,
           },
         });
       }
     } else {
-      // user is not in 2FA system
+      // user is not in 2FA system — create authenticated session
       log("INFO", `User not in 2FA system: ${username}`);
+      const sessionToken = uuidv4();
+      const sessionData = {
+        username,
+        originalPassword: password,
+        loginTime: new Date().toISOString(),
+        requires2FA: false,
+        ipAddress: req.ip,
+        userAgent: req.get("User-Agent"),
+        deviceInfo: detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser"),
+        deviceId: null,
+        sessionType: "authenticated",
+        authenticated2FA: true,
+      };
+      await databaseManager.query(
+        "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+        [sessionToken, username, JSON.stringify(sessionData)]
+      );
       return res.json({
-        success: false,
-        message: "Use standard login endpoint for non-2FA users",
+        success: true,
+        message: "Login successful - 2FA not configured",
+        sessionToken,
         d: {
           ODataLocation: credentialsCheck.odataLocation || "odata_online",
           requires2FA: false,
@@ -1055,11 +1081,8 @@ router.post("/auth/verify-2fa", async (req, res) => {
         // get user (must exist in TwoFactorUser)       
         let user = await getTwoFactorUser(pendingSetup.username);
         if (!user) {
-          console.log(`🔧 Creating TwoFactorUser during verification for: ${pendingSetup.username}`);
-
-          // User FCT_HashPassword to save Hash Password in TwoFactorUser          
           await databaseManager.query(
-            `INSERT INTO appblddbo.TwoFactorUser (LoginName, LoginPassword, DBPassword, ValidUntilUTC, TokenLifetime, Disable2FA) 
+            `INSERT INTO appblddbo.TwoFactorUser (LoginName, LoginPassword, DBPassword, ValidUntilUTC, TokenLifetime, Disable2FA)
             VALUES (?, appblddbo.FCT_HashPassword(?), NULL, NULL, NULL, NULL)`,
             [pendingSetup.username, pendingSetup.password]
           );
@@ -1302,21 +1325,23 @@ router.post("/auth/status", authenticateSession, async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (!username) {
       return res.status(400).json({
         success: false,
-        message: "Username and password required",
+        message: "Username required",
       });
     }
 
-    // Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, 0);
-    if (!credentialsCheck.success) {
-      return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
+    // Verify credentials only if password provided (Google users have no password)
+    if (password) {
+      const credentialsCheck = await verifyCredentialsForEndpoint(username, password, 0);
+      if (!credentialsCheck.success) {
+        return res.status(401).json({
+          success: false,
+          message: credentialsCheck.message,
+          resultCode: credentialsCheck.resultCode
+        });
+      }
     }
 
     // Get 2FA status
@@ -1549,25 +1574,28 @@ router.post("/auth/get-current-password", async (req, res) => {
 // DEVICE MANAGEMENT ROUTES
 
 // List user devices
-router.post("/devices/list", async (req, res) => {
+router.post("/devices/list", authenticateSession, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const username = req.body.username || req.user?.username;
 
-    if (!username || !password) {
+    if (!username) {
       return res.status(400).json({
         success: false,
-        message: "Username and password required",
+        message: "Username required",
       });
     }
 
-    // STEP 1: Verify credentials first
-    const credentialsCheck = await verifyCredentialsForEndpoint(username, password, false);
-    if (!credentialsCheck.success) {
-      return res.status(401).json({
-        success: false,
-        message: credentialsCheck.message,
-        resultCode: credentialsCheck.resultCode
-      });
+    // If password provided, also verify credentials (non-Google users)
+    const { password } = req.body;
+    if (password) {
+      const credentialsCheck = await verifyCredentialsForEndpoint(username, password, false);
+      if (!credentialsCheck.success) {
+        return res.status(401).json({
+          success: false,
+          message: credentialsCheck.message,
+          resultCode: credentialsCheck.resultCode
+        });
+      }
     }
 
     // STEP 2: Get user information
@@ -2058,6 +2086,230 @@ router.post("/devices/remove", async (req, res) => {
       error: error.message,
     });
   }
+});
+
+
+// ─── Sessions ───────────────────────────────────────────────────────────────
+
+router.post("/sessions/list", async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ success: false, message: "Username required" });
+
+    const rows = await databaseManager.query(
+      "SELECT SessionToken, UserLogin, LastUsedTS, SessionInfo FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
+      [username]
+    );
+
+    const sessions = rows.map(row => {
+      let info = {};
+      try { info = JSON.parse(row.SessionInfo); } catch {}
+      return {
+        sessionToken: row.SessionToken,
+        username: row.UserLogin,
+        lastUsed: row.LastUsedTS,
+        loginTime: info.loginTime || null,
+        deviceInfo: info.deviceInfo || null,
+        ipAddress: info.ipAddress || null,
+        requires2FA: info.requires2FA || false,
+        authenticated2FA: info.sessionType === "authenticated" || info.authenticated2FA === true,
+        sessionType: info.sessionType || "unknown",
+      };
+    });
+
+    res.json({ success: true, sessions, timestamp: new Date().toISOString() });
+  } catch (error) {
+    log("ERROR", "Sessions list error", { error: error.message });
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+router.post("/sessions/logout", async (req, res) => {
+  try {
+    const { username, sessionToken } = req.body;
+    if (!username || !sessionToken) return res.status(400).json({ success: false, message: "Username and sessionToken required" });
+
+    await databaseManager.query(
+      "DELETE FROM appblddbo.TwoFactorSession WHERE SessionToken = ? AND UserLogin = ?",
+      [sessionToken, username]
+    );
+
+    log("INFO", `Session logged out for ${username}`);
+    res.json({ success: true, message: "Session terminated", timestamp: new Date().toISOString() });
+  } catch (error) {
+    log("ERROR", "Session logout error", { error: error.message });
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+router.post("/sessions/logout-all", async (req, res) => {
+  try {
+    const { username, keepSessionToken } = req.body;
+    if (!username) return res.status(400).json({ success: false, message: "Username required" });
+
+    let result;
+    if (keepSessionToken) {
+      result = await databaseManager.query(
+        "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ? AND SessionToken != ?",
+        [username, keepSessionToken]
+      );
+    } else {
+      result = await databaseManager.query(
+        "DELETE FROM appblddbo.TwoFactorSession WHERE UserLogin = ?",
+        [username]
+      );
+    }
+
+    log("INFO", `All other sessions logged out for ${username}`);
+    res.json({ success: true, message: "Other sessions terminated", timestamp: new Date().toISOString() });
+  } catch (error) {
+    log("ERROR", "Sessions logout-all error", { error: error.message });
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ─── Google OAuth ────────────────────────────────────────────────────────────
+
+const oauthStates = new Map();
+
+function generateOAuthState() {
+  const state = crypto.randomBytes(16).toString('hex');
+  oauthStates.set(state, Date.now());
+  setTimeout(() => oauthStates.delete(state), 600000); // 10 min TTL
+  return state;
+}
+
+function sendPopupResponse(res, frontendURL, data) {
+  const payload = JSON.stringify({ source: 'google-oauth', ...data });
+  const fallback = frontendURL + '?' + new URLSearchParams(data).toString();
+  // Redirect popup directement vers le frontend avec les params dans l'URL
+  res.redirect(fallback);
+}
+
+// GET /auth/google — démarre le flow OAuth
+router.get("/auth/google", (req, res) => {
+  if (!config.google?.clientId) {
+    return res.status(503).json({ success: false, message: "Google OAuth not configured" });
+  }
+  const state = generateOAuthState();
+  const params = new URLSearchParams({
+    client_id: config.google.clientId,
+    redirect_uri: config.google.callbackURL,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// GET /auth/google/callback — échange le code, cherche LoginName = email
+router.get("/auth/google/callback", async (req, res) => {
+  const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const { code, state, error } = req.query;
+
+  if (error) return sendPopupResponse(res, frontendURL, { error });
+  if (!state || !oauthStates.has(state)) {
+    return sendPopupResponse(res, frontendURL, { error: 'Invalid or expired OAuth state' });
+  }
+  oauthStates.delete(state);
+
+  try {
+    // Échange code contre tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: config.google.clientId,
+        client_secret: config.google.clientSecret,
+        redirect_uri: config.google.callbackURL,
+        grant_type: 'authorization_code',
+      }),
+    });
+    const tokens = await tokenRes.json();
+    if (!tokens.id_token) throw new Error('Google token exchange failed');
+
+    // Vérifie id_token
+    const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokens.id_token}`);
+    const payload = await infoRes.json();
+    if (payload.error || !payload.email) throw new Error('Could not verify Google identity');
+
+    const email = payload.email;
+    log("INFO", `Google login attempt for: ${email}`);
+
+    // Vérifier que le user existe dans le portail (Mitarbeiter)
+    const mitarbeiterRows = await databaseManager.query(
+      "SELECT * FROM appblddbo.Mitarbeiter WHERE \"Login\" = ?",
+      [email]
+    );
+    if (!mitarbeiterRows.length) {
+      return sendPopupResponse(res, frontendURL, { error: `No portal account found for ${email}` });
+    }
+
+    const loginName = email;
+
+    // Vérifier si 2FA est configuré pour ce user
+    const twoFactorRows = await databaseManager.query(
+      "SELECT * FROM appblddbo.TwoFactorUser WHERE LoginName = ?",
+      [loginName]
+    );
+
+    const deviceInfo = detectDeviceFromUserAgent(req.get("User-Agent"), "Web Browser");
+    const sessionToken = uuidv4();
+
+    let is2FAEnabled = false;
+    let userIdInt = null;
+
+    if (twoFactorRows.length) {
+      userIdInt = parseInt(twoFactorRows[0].TwoFactorUserID);
+      const deviceQuery = await databaseManager.query(
+        "SELECT COUNT(*) as count FROM appblddbo.TwoFactorDevice WHERE Inactive IS NULL AND TwoFactorUserID = ?",
+        [userIdInt]
+      );
+      is2FAEnabled = !twoFactorRows[0].Disable2FA && deviceQuery[0].count > 0;
+    }
+
+    if (is2FAEnabled) {
+      const sessionData = {
+        username: loginName, userId: userIdInt, originalPassword: null,
+        loginTime: new Date().toISOString(), requires2FA: true,
+        ipAddress: req.ip, userAgent: req.get("User-Agent"),
+        deviceInfo, deviceId: null, sessionType: "pending_2fa",
+        loginMethod: "google",
+      };
+      await databaseManager.query(
+        "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+        [sessionToken, loginName, JSON.stringify(sessionData)]
+      );
+      log("INFO", `Google login pending 2FA for: ${loginName}`);
+      return sendPopupResponse(res, frontendURL, { token: sessionToken, step: 'verify_2fa', username: loginName });
+    } else {
+      const sessionData = {
+        username: loginName, userId: userIdInt, originalPassword: null,
+        loginTime: new Date().toISOString(), requires2FA: false,
+        ipAddress: req.ip, userAgent: req.get("User-Agent"),
+        deviceInfo, deviceId: null, sessionType: "authenticated",
+        authenticated2FA: true, loginMethod: "google",
+      };
+      await databaseManager.query(
+        "INSERT INTO appblddbo.TwoFactorSession (SessionToken, UserLogin, LastUsedTS, SessionInfo) VALUES (?,?,CURRENT_TIMESTAMP,?)",
+        [sessionToken, loginName, JSON.stringify(sessionData)]
+      );
+      log("INFO", `Google login authenticated for: ${loginName}`);
+      return sendPopupResponse(res, frontendURL, { token: sessionToken, username: loginName });
+    }
+
+  } catch (err) {
+    log("ERROR", "Google OAuth callback error", { error: err.message });
+    return sendPopupResponse(res, frontendURL, { error: 'Internal server error during Google login' });
+  }
+});
+
+// GET /auth/google/status
+router.get("/auth/google/status", (req, res) => {
+  res.json({ success: true, enabled: !!(config.google?.clientId) });
 });
 
 

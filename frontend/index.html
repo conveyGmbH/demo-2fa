@@ -1,1720 +1,2056 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LeadSuccess Portal - Secure Access</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>LeadSuccess Portal — Secure Access</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
-
-        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.protocol !== 'file:';
         window.AppConfig = {
-            isProduction: isProduction,
-            environment: isProduction ? 'production' : 'development',        
-
+            isProduction,
             api: {
-                baseURL: isProduction
-                    ? 'https://deimos.convey.de/2fabackend/api/v1' 
-                    : 'http://localhost:4000/api/v1',
+                baseURL: isProduction ? 'https://deimos.convey.de/2fabackend/api/v1' : 'http://localhost:4000/api/v1',
                 timeout: 30000
             },
-
-            app: {
-                name: 'LeadSuccess 2FA Portal',
-                version: '1.0.0',
-                frontendURL: isProduction
-                    ? 'https://deimos.convey.de/ls2fa'
-                    : window.location.origin
-            },
-
-            security: {
-                sessionTimeout: 30 * 60 * 1000,
-                maxLoginAttempts: 3,
-                lockoutDuration: 15 * 60 * 1000
-            },
-
-            logging: {
-                level: isProduction ? 'ERROR' : 'DEBUG',
-                enableConsole: !isProduction
-            }
-        };
-
-        // Log for debugging
-        if (window.AppConfig.logging.enableConsole) {
-            console.log('🔧 App Configuration loaded:', window.AppConfig);
-            console.log('🌍 Environment:', window.AppConfig.environment);
-            console.log('🔗 API Base URL:', window.AppConfig.api.baseURL);
-        }
-    </script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#D86141',
-                        'primary-light': '#f8b4a6',
-                        'primary-dark': '#b53e20',
-                    }
-                }
-            }
+            logging: { enableConsole: !isProduction }
         };
     </script>
     <style>
-        .spinner {
-            border: 2px solid #f3f4f6;
-            border-top: 2px solid #D86141;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
+        /* ═══════════════════════════════════════════
+           CSS VARIABLES — Dark (default) & Light
+        ═══════════════════════════════════════════ */
+        :root {
+            --bg:           #0f0f10;
+            --bg-card:      #1a1a1f;
+            --bg-elevated:  #222228;
+            --bg-hover:     #2a2a32;
+            --border:       rgba(255,255,255,0.08);
+            --border-strong:rgba(255,255,255,0.14);
+            --text:         #f0f0f2;
+            --text-muted:   #8b8b99;
+            --text-faint:   #55556a;
+            --accent:       #D86141;
+            --accent-hover: #b53e20;
+            --accent-dim:   rgba(216,97,65,0.12);
+            --destructive:  #ef4444;
+            --destructive-dim: rgba(239,68,68,0.12);
+            --success:      #10b981;
+            --success-dim:  rgba(16,185,129,0.12);
+            --warning:      #f59e0b;
+            --shadow-lg:    0 24px 64px rgba(0,0,0,0.5);
+            --shadow-sm:    0 2px 8px rgba(0,0,0,0.3);
+            --radius-xl:    16px;
+            --radius-lg:    12px;
+            --radius-md:    8px;
+            --radius-sm:    6px;
         }
-    
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-    
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    
-        @keyframes pulse {
-    
-            0%,
-            100% {
-                opacity: 1;
-            }
-    
-            50% {
-                opacity: 0.5;
-            }
-        }
-    
-        .modal-overlay {
-            backdrop-filter: blur(4px);
-        }
-    
-        .fade-in {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-    
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-    
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-    
-        .qr-code-container {
-            background: white;
-            padding: 16px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        #setup2FAModal .bg-white {
-            max-height: 85vh;
-            overflow-y: auto;
-        }
-    
-        /* Responsive modal */
-        @media (max-height: 700px) {
-            #setup2FAModal .bg-white {
-                max-height: 85vh;
-            }
-    
-            #qrCodeImage,
-            #qrCodeLoading {
-                width: 120px !important;
-                height: 120px !important;
-            }
-        }
-    
-        @media (max-height: 600px) {
-            #setup2FAModal .bg-white {
-                max-height: 80vh;
-            }
-            
-            #qrCodeImage, #qrCodeLoading {
-                width: 120px !important;
-                height: 120px !important;
-            }
-            
-            #setup2FAModal .space-y-4 {
-                gap: 0.5rem;
-            }
-            
-            #setup2FAModal .text-sm {
-                font-size: 0.7rem;
-            }
-            
-            #setup2FAModal input {
-                padding: 0.4rem 0.6rem;
-                font-size: 0.9rem;
-            }
-            
-            #setup2FAModal button {
-                padding: 0.5rem;
-                font-size: 0.8rem;
-            }
+        .light {
+            --bg:           #f4f4f8;
+            --bg-card:      #ffffff;
+            --bg-elevated:  #f0f0f5;
+            --bg-hover:     #e8e8f0;
+            --border:       rgba(0,0,0,0.08);
+            --border-strong:rgba(0,0,0,0.14);
+            --text:         #0f0f10;
+            --text-muted:   #6b6b7a;
+            --text-faint:   #a0a0b0;
+            --accent:       #D86141;
+            --accent-hover: #b53e20;
+            --accent-dim:   rgba(216,97,65,0.10);
+            --destructive:  #dc2626;
+            --destructive-dim: rgba(220,38,38,0.10);
+            --success:      #059669;
+            --success-dim:  rgba(5,150,105,0.10);
+            --warning:      #d97706;
+            --shadow-lg:    0 24px 64px rgba(0,0,0,0.12);
+            --shadow-sm:    0 2px 8px rgba(0,0,0,0.08);
         }
 
-        @media (max-height: 500px) {
-            #setup2FAModal .bg-white {
-                max-height: 95vh;
-            }
-            
-            #qrCodeImage, #qrCodeLoading {
-                width: 100px !important;
-                height: 100px !important;
-            }
-            
-            #setup2FAModal .p-6 {
-                padding: 1rem;
-            }
-            
-            #setup2FAModal .text-lg {
-                font-size: 1rem;
-            }
-            
-            #manualKey {
-                font-size: 0.6rem;
-            }
+        /* ═══════════════════════════════════════════
+           RESET & BASE
+        ═══════════════════════════════════════════ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: 16px; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            transition: background 200ms ease, color 200ms ease;
         }
-    
-     
-    
+        button { font-family: inherit; cursor: pointer; border: none; background: none; }
+        input  { font-family: inherit; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* ═══════════════════════════════════════════
+           SCROLLBAR
+        ═══════════════════════════════════════════ */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+        /* ═══════════════════════════════════════════
+           ANIMATIONS
+        ═══════════════════════════════════════════ */
+        @keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeUp  { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        @keyframes caretBlink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes shake   { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+        @keyframes pulse   { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .fade-in  { animation: fadeIn  0.25s ease both; }
+        .fade-up  { animation: fadeUp  0.3s ease both; }
+        .scale-in { animation: scaleIn 0.2s ease both; }
+        .shake    { animation: shake   0.4s ease; }
+
+        /* ═══════════════════════════════════════════
+           SPINNER
+        ═══════════════════════════════════════════ */
+        .spinner {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            flex-shrink: 0;
+        }
+        .spinner-sm { width: 14px; height: 14px; }
+        .spinner-accent { border-color: var(--accent-dim); border-top-color: var(--accent); }
+
+        /* ═══════════════════════════════════════════
+           BUTTONS
+        ═══════════════════════════════════════════ */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 0 16px; height: 36px; border-radius: var(--radius-md);
+            font-size: 14px; font-weight: 500;
+            transition: all 150ms ease;
+            white-space: nowrap;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        .btn-primary {
+            background: var(--accent); color: #fff;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary-lg {
+            width: 100%; height: 52px; border-radius: var(--radius-md);
+            background: var(--accent); color: #fff;
+            font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: background 150ms ease;
+        }
+        .btn-primary-lg:hover { background: var(--accent-hover); }
+        .btn-primary-lg:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-strong);
+            color: var(--text-muted);
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+        .btn-ghost {
+            background: transparent; color: var(--text-muted);
+        }
+        .btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+        .btn-danger {
+            background: transparent;
+            border: 1px solid rgba(239,68,68,0.3);
+            color: var(--destructive);
+        }
+        .btn-danger:hover { background: var(--destructive-dim); }
+
+        .btn-icon {
+            width: 36px; height: 36px; padding: 0;
+            border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted);
+            transition: all 150ms ease;
+        }
+        .btn-icon:hover { background: var(--bg-hover); color: var(--text); }
+
+        /* ═══════════════════════════════════════════
+           INPUTS
+        ═══════════════════════════════════════════ */
+        .input {
+            width: 100%; height: 52px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text);
+            font-size: 14px; padding: 0 16px;
+            outline: none;
+            transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+        .input::placeholder { color: var(--text-faint); }
+        .input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+        .input-sm {
+            height: 40px; font-size: 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text); padding: 0 12px; outline: none;
+            transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+        .input-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+        .input-sm::placeholder { color: var(--text-faint); }
+
+        /* ═══════════════════════════════════════════
+           CARDS
+        ═══════════════════════════════════════════ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+        .card-title {
+            font-size: 15px; font-weight: 600; color: var(--text);
+            margin-bottom: 20px;
+        }
+
+        /* ═══════════════════════════════════════════
+           BADGES
+        ═══════════════════════════════════════════ */
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 99px;
+            font-size: 12px; font-weight: 500;
+        }
+        .badge-success { background: var(--success-dim); color: var(--success); }
+        .badge-warning { background: rgba(245,158,11,0.12); color: var(--warning); }
+        .badge-muted   { background: var(--bg-elevated); color: var(--text-muted); }
+        .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+        /* ═══════════════════════════════════════════
+           FORM ROW (label + value in cards)
+        ═══════════════════════════════════════════ */
+        .info-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-row-label { color: var(--text-muted); font-weight: 500; }
+        .info-row-value { color: var(--text); font-weight: 500; }
+
+        /* ═══════════════════════════════════════════
+           MODALS
+        ═══════════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 9000;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(6px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            width: 100%; max-width: 440px;
+            max-height: 90vh; overflow-y: auto;
+            animation: scaleIn 0.2s ease both;
+        }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 24px 0;
+        }
+        .modal-title {
+            font-size: 16px; font-weight: 600; color: var(--text);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .modal-title-icon {
+            width: 32px; height: 32px; border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+        .modal-body  { padding: 20px 24px 24px; }
+        .modal-close {
+            width: 30px; height: 30px; border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); font-size: 18px;
+            transition: all 150ms ease;
+        }
+        .modal-close:hover { background: var(--bg-hover); color: var(--text); }
+        .modal-actions {
+            display: flex; gap: 10px; padding-top: 20px;
+            border-top: 1px solid var(--border); margin-top: 20px;
+        }
+        .modal-actions .btn { flex: 1; }
+
+        /* ═══════════════════════════════════════════
+           FORM GROUPS (inside modals)
+        ═══════════════════════════════════════════ */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block; font-size: 13px; font-weight: 500;
+            color: var(--text-muted); margin-bottom: 8px;
+        }
+        .form-readonly {
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-md); padding: 10px 14px;
+            font-size: 14px; color: var(--text); font-weight: 500;
+        }
+        .form-help { font-size: 12px; color: var(--text-faint); margin-top: 5px; }
+
+        /* ═══════════════════════════════════════════
+           WARNING BOX
+        ═══════════════════════════════════════════ */
+        .warning-box {
+            display: flex; gap: 12px;
+            padding: 14px; border-radius: var(--radius-md);
+            background: rgba(245,158,11,0.08);
+            border: 1px solid rgba(245,158,11,0.2);
+            margin-bottom: 20px;
+        }
+        .warning-box-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .warning-box-title { font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 4px; }
+        .warning-box-text  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ═══════════════════════════════════════════
+           ERROR / SUCCESS INLINE
+        ═══════════════════════════════════════════ */
+        .inline-error {
+            display: none;
+            background: var(--destructive-dim); border: 1px solid rgba(239,68,68,0.2);
+            border-radius: var(--radius-md); padding: 10px 14px;
+            font-size: 13px; color: var(--destructive);
+            margin-top: 14px; line-height: 1.4;
+        }
+        .inline-error.visible { display: block; animation: fadeIn 0.15s ease; }
+
+        /* ═══════════════════════════════════════════
+           LOGIN PAGE
+        ═══════════════════════════════════════════ */
+        #loginContainer {
+            display: flex; min-height: 100vh;
+        }
+        /* Hero panel */
+        .login-hero {
+            flex: 1; display: none;
+            position: relative; overflow: hidden;
+            background: #0a0a0c;
+            flex-direction: column; justify-content: center;
+            padding: 48px;
+        }
+        @media (min-width: 1024px) { .login-hero { display: flex; } }
+        .login-hero-bg {
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 30% 40%, rgba(216,97,65,0.18) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 80%, rgba(100,60,200,0.12) 0%, transparent 50%),
+                        linear-gradient(135deg, #0a0a0c 0%, #12121a 100%);
+        }
+        .login-hero-grid {
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+        .login-hero-content { position: relative; z-index: 1; }
+        .login-hero-logo {
+            display: flex; align-items: center; gap: 10px;
+            position: absolute; top: 48px; left: 48px; z-index: 1;
+        }
+        .login-hero-logo-circle {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; color: #fff;
+        }
+        .login-hero-logo-text { font-size: 16px; font-weight: 600; color: #fff; }
+        .login-hero-tagline {
+            font-size: 13px; color: rgba(255,255,255,0.4);
+            margin-bottom: 12px; letter-spacing: 0.05em;
+        }
+        .login-hero-headline {
+            font-size: 52px; font-weight: 700; line-height: 1.05;
+            color: #fff; min-height: 64px;
+        }
+        .login-hero-cursor {
+            display: inline-block; width: 3px; height: 52px;
+            background: var(--accent);
+            vertical-align: middle; margin-left: 2px;
+            animation: caretBlink 1s ease infinite;
+        }
+        .login-hero-sub {
+            font-size: 15px; color: rgba(255,255,255,0.45);
+            margin-top: 16px; max-width: 340px; line-height: 1.6;
+        }
+        /* Form panel */
+        .login-form-panel {
+            width: 100%;
+            display: flex; align-items: center; justify-content: center;
+            padding: 48px 40px;
+            background: var(--bg);
+        }
+        @media (min-width: 1024px) { .login-form-panel { width: 520px; flex-shrink: 0; border-left: 1px solid var(--border); } }
+        .login-form-inner { width: 100%; max-width: 360px; }
+        .login-form-logo {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 40px;
+        }
+        .login-form-logo-circle {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; color: #fff;
+        }
+        .login-form-logo-text { font-size: 15px; font-weight: 600; color: var(--text); }
+        .login-title { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+        .login-subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 36px; }
+        .login-field { margin-bottom: 20px; }
+        .login-field-label {
+            display: block; font-size: 13px; font-weight: 500;
+            color: var(--text-muted); margin-bottom: 8px;
+        }
+        .login-field-label span { color: var(--accent); }
+        .login-consent {
+            display: flex; align-items: flex-start; gap: 10px;
+            margin-bottom: 28px;
+        }
+        .login-consent-check {
+            width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0;
+            accent-color: var(--accent); cursor: pointer;
+        }
+        .login-consent-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+        .login-error-banner {
+            display: none; align-items: center; gap: 10px;
+            background: var(--destructive-dim); border: 1px solid rgba(239,68,68,0.2);
+            border-radius: var(--radius-md); padding: 12px 16px;
+            font-size: 13px; color: var(--destructive);
+            margin-bottom: 20px;
+        }
+        .login-error-banner.visible { display: flex; animation: fadeIn 0.2s ease; }
+        .login-footer { text-align: center; margin-top: 24px; }
+        .login-footer a { font-size: 13px; color: var(--text-muted); }
+        .login-footer a:hover { color: var(--accent); text-decoration: underline; }
+        .login-divider {
+            display: flex; align-items: center; gap: 12px;
+            margin: 20px 0; color: var(--text-faint); font-size: 13px;
+        }
+        .login-divider::before, .login-divider::after {
+            content: ''; flex: 1; height: 1px; background: var(--border);
+        }
+        .btn-google {
+            width: 100%; height: 48px; border-radius: var(--radius-md);
+            background: var(--bg-elevated); border: 1px solid var(--border-strong);
+            color: var(--text); font-size: 14px; font-weight: 500;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: all 150ms ease; cursor: pointer;
+        }
+        .btn-google:hover { background: var(--bg-hover); border-color: var(--accent); }
+
+        /* ═══════════════════════════════════════════
+           DASHBOARD LAYOUT
+        ═══════════════════════════════════════════ */
+        #dashboardLayout { display: none; flex-direction: column; min-height: 100vh; }
+        #dashboardLayout.visible { display: flex; }
+
+        /* Header */
+        .dash-header {
+            height: 56px; flex-shrink: 0;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px;
+        }
+        .dash-header-left { display: flex; align-items: center; gap: 12px; }
+        .dash-logo-circle {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+        }
+        .dash-title { font-size: 15px; font-weight: 600; color: var(--text); }
+        .dash-header-right { display: flex; align-items: center; gap: 8px; }
+        .dash-username {
+            font-size: 13px; color: var(--text-muted); font-weight: 500;
+            padding: 0 8px;
+        }
+        .dash-logout {
+            display: flex; align-items: center; gap: 6px;
+            padding: 0 12px; height: 32px; border-radius: var(--radius-md);
+            font-size: 13px; font-weight: 500; color: var(--text-muted);
+            transition: all 150ms ease; border: 1px solid var(--border);
+        }
+        .dash-logout:hover { color: var(--destructive); border-color: rgba(239,68,68,0.3); background: var(--destructive-dim); }
+
+        /* Tab nav */
+        .dash-tabs {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            display: flex; padding: 0 24px; gap: 4px;
+        }
+        .dash-tab {
+            padding: 0 16px; height: 44px;
+            display: flex; align-items: center;
+            font-size: 14px; font-weight: 500;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            transition: all 150ms ease; cursor: pointer;
+            margin-bottom: -1px;
+        }
+        .dash-tab:hover { color: var(--text); }
+        .dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        /* Main content */
+        .dash-main { flex: 1; padding: 32px 24px; max-width: 1080px; width: 100%; margin: 0 auto; }
+
+        /* Overview grid */
+        .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .overview-grid { grid-template-columns: 1fr; } }
+
+        .security-card { text-align: center; padding: 40px 24px; }
+        .security-icon { font-size: 56px; margin-bottom: 16px; }
+        .security-actions { margin-top: 24px; display: flex; justify-content: center; gap: 10px; }
+
+        /* Tab content */
+        .tab-content { display: none; animation: fadeUp 0.2s ease both; }
+        .tab-content.active { display: block; }
+
+        /* ═══════════════════════════════════════════
+           DEVICES LIST
+        ═══════════════════════════════════════════ */
+        .devices-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .devices-title { font-size: 15px; font-weight: 600; color: var(--text); }
+
+        .device-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 10px;
+            transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+        .device-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+        .device-item.current { border-left: 3px solid var(--accent); }
+
+        .device-item-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+        .device-icon { font-size: 26px; flex-shrink: 0; }
+        .device-info { flex: 1; min-width: 0; }
+        .device-name-row {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin-bottom: 3px;
+        }
         .device-name {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px; font-weight: 600; color: var(--text);
+            font-family: inherit;
         }
-    
-        .utf8-support {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        .device-meta { font-size: 12px; color: var(--text-faint); }
+        .device-current-badge {
+            font-size: 11px; font-weight: 500;
+            background: var(--accent-dim); color: var(--accent);
+            padding: 2px 8px; border-radius: 99px;
         }
-    
-        .error-shake {
-            animation: shake 0.5s ease-in-out;
+        .device-edit-btn {
+            color: var(--text-faint);
+            padding: 4px 6px; border-radius: 4px;
+            display: inline-flex; align-items: center;
+            transition: all 150ms ease;
         }
-    
-        @keyframes shake {
-    
-            0%,
-            100% {
-                transform: translateX(0);
-            }
-    
-            25% {
-                transform: translateX(-5px);
-            }
-    
-            75% {
-                transform: translateX(5px);
-            }
+        .device-edit-btn:hover { color: var(--text-muted); background: var(--bg-hover); }
+        .device-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+
+        .devices-empty {
+            text-align: center; padding: 60px 24px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+        }
+        .devices-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .devices-empty-text { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+
+        /* ═══════════════════════════════════════════
+           SESSIONS LIST
+        ═══════════════════════════════════════════ */
+        .sessions-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .session-item {
+            display: flex; align-items: center; gap: 14px;
+            padding: 16px 20px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); margin-bottom: 10px;
+            transition: border-color 150ms ease;
+        }
+        .session-item.current { border-left: 3px solid var(--accent); }
+        .session-icon { font-size: 26px; flex-shrink: 0; }
+        .session-info { flex: 1; min-width: 0; }
+        .session-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+        .session-name { font-size: 14px; font-weight: 600; color: var(--text); }
+        .session-meta { font-size: 12px; color: var(--text-faint); display: flex; flex-wrap: wrap; gap: 10px; }
+        .session-verified { font-size: 12px; color: var(--success); display: flex; align-items: center; gap: 4px; }
+
+        /* ═══════════════════════════════════════════
+           OTP INPUT SLOTS
+        ═══════════════════════════════════════════ */
+        /* ═══ VERIFY 2FA MODAL — Modern design ═══ */
+        .v2fa-header {
+            display: flex; align-items: flex-start; gap: 14px;
+            padding: 24px 24px 0;
+        }
+        .v2fa-shield-icon {
+            width: 48px; height: 48px; flex-shrink: 0;
+            background: rgba(16,185,129,0.15);
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .v2fa-header-text h2 {
+            font-size: 18px; font-weight: 700; color: var(--text);
+            margin: 0 0 4px;
+        }
+        .v2fa-header-text p {
+            font-size: 13px; color: var(--text-muted); margin: 0;
+        }
+        .v2fa-body { padding: 20px 28px 28px; }
+
+        /* Collapsible QR section */
+        .v2fa-qr-toggle {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            cursor: pointer; margin-bottom: 14px;
+            transition: background 150ms ease;
+        }
+        .v2fa-qr-toggle:hover { background: var(--bg-hover); }
+        .v2fa-qr-toggle-left { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+        .v2fa-qr-toggle-arrow {
+            width: 0; height: 0;
+            border-left: 5px solid transparent; border-right: 5px solid transparent;
+            border-top: 6px solid var(--accent);
+            transition: transform 200ms ease;
+        }
+        .v2fa-qr-toggle.open .v2fa-qr-toggle-arrow { transform: rotate(180deg); }
+        .v2fa-qr-panel {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 14px;
+            text-align: center;
+            display: none;
+        }
+        .v2fa-qr-panel.open { display: block; }
+        .v2fa-qr-panel img { border-radius: 8px; background: #fff; padding: 8px; max-width: 160px; }
+        .v2fa-qr-panel p { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+        .v2fa-qr-panel p strong { color: var(--text); }
+
+        /* Demo code timer */
+        .v2fa-demo-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            display: flex; align-items: center; gap: 16px;
+            margin-bottom: 20px;
+        }
+        .v2fa-timer {
+            position: relative; width: 44px; height: 44px; flex-shrink: 0;
+        }
+        .v2fa-timer svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }
+        .v2fa-timer-track { fill: none; stroke: var(--border-strong); stroke-width: 3; }
+        .v2fa-timer-fill {
+            fill: none; stroke: var(--accent); stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 113;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear, stroke 1s ease;
+        }
+        .v2fa-timer-text {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .v2fa-demo-info { flex: 1; }
+        .v2fa-demo-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; }
+        .v2fa-demo-code { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); letter-spacing: 4px; }
+        .v2fa-demo-refresh {
+            width: 28px; height: 28px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); cursor: pointer; border-radius: 6px;
+            transition: color 150ms ease, background 150ms ease;
+        }
+        .v2fa-demo-refresh:hover { color: var(--text); background: var(--bg-hover); }
+
+        /* OTP slots */
+        .otp-wrapper {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin: 0 0 16px;
+        }
+        .otp-slot {
+            width: 48px; height: 56px;
+            background: var(--bg-elevated);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text);
+            position: relative; overflow: hidden;
+            transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+            cursor: text;
+        }
+        .otp-slot.active {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+            box-shadow: 0 0 0 3px rgba(216,97,65,0.18);
+        }
+        .otp-slot.filled { border-color: var(--border-strong); background: var(--bg-card); }
+        .otp-slot .otp-caret {
+            display: none; width: 2px; height: 26px;
+            background: var(--accent); border-radius: 1px;
+            animation: caretBlink 1s ease infinite;
+        }
+        .otp-slot.active:not(.filled) .otp-caret { display: block; }
+        .otp-slot .otp-digit { font-size: 22px; }
+        .otp-separator {
+            width: 14px; height: 2px;
+            background: var(--border-strong); border-radius: 1px; flex-shrink: 0;
+        }
+        /* Hidden real input behind the slots */
+        #otpRealInput {
+            position: absolute; opacity: 0; pointer-events: none;
+            width: 1px; height: 1px; top: -9999px;
+        }
+
+        /* ═══════════════════════════════════════════
+           DARK / LIGHT TOGGLE
+        ═══════════════════════════════════════════ */
+        .theme-icon-dark  { display: block; }
+        .theme-icon-light { display: none; }
+        .light .theme-icon-dark  { display: none; }
+        .light .theme-icon-light { display: block; }
+
+        /* ═══════════════════════════════════════════
+           SETUP 2FA MODAL (QR, etc.)
+        ═══════════════════════════════════════════ */
+        #tfaSetupModal .modal-panel { max-width: 460px; }
+        .qr-container {
+            background: #fff; border-radius: var(--radius-md);
+            padding: 16px; text-align: center; margin-bottom: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+        .qr-container img { max-width: 160px; width: 100%; height: auto; }
+        .manual-key-box {
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-md); padding: 12px 14px;
+            margin-bottom: 16px;
+        }
+        .manual-key-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        .manual-key-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: var(--text);
+            word-break: break-all; line-height: 1.6;
+        }
+
+        /* ═══════════════════════════════════════════
+           LOADING OVERLAY
+        ═══════════════════════════════════════════ */
+        #loadingOverlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 16px;
+        }
+        #loadingOverlay.visible { display: flex; }
+        #loadingOverlay .spinner { width: 32px; height: 32px; border-width: 3px; }
+        #loadingText { font-size: 15px; color: rgba(255,255,255,0.7); font-weight: 500; }
+
+        /* ═══════════════════════════════════════════
+           TOAST (success / error)
+        ═══════════════════════════════════════════ */
+        #toast {
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px; border-radius: var(--radius-md);
+            font-size: 14px; font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            transition: all 200ms ease;
+            transform: translateY(0); opacity: 1;
+            pointer-events: none;
+        }
+        #toast.hidden { transform: translateY(20px); opacity: 0; pointer-events: none; }
+        #toast.success { background: var(--success-dim); border: 1px solid rgba(16,185,129,0.3); color: var(--success); }
+        #toast.error   { background: var(--destructive-dim); border: 1px solid rgba(239,68,68,0.3); color: var(--destructive); }
+        #toast.info    { background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text); }
+
+        /* ═══════════════════════════════════════════
+           RESPONSIVE
+        ═══════════════════════════════════════════ */
+        @media (max-width: 600px) {
+            .login-form-panel { padding: 32px 20px; }
+            .dash-main { padding: 20px 16px; }
+            .dash-header { padding: 0 16px; }
+            .dash-tabs { padding: 0 16px; }
+            .dash-username { display: none; }
+            .modal-panel { border-radius: var(--radius-lg); }
+            .otp-slot { width: 42px; height: 52px; font-size: 20px; }
         }
     </style>
 </head>
+<body>
 
-<body class="bg-gray-50 min-h-screen">
-    <div id="loginContainer" class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div class="max-w-md w-full space-y-8">
-            <div class="text-center">
-                <div class="mx-auto h-16 w-16 bg-primary rounded-full flex items-center justify-center">
-                    <span class="text-2xl font-bold text-white">LS</span>
-                </div>
-                <h1 class="mt-4 text-2xl font-bold text-gray-900">LeadSuccess Portal</h1>
-                <p class="mt-2 text-sm text-gray-600">Secure access to your account</p>
+<!-- ════════════════════════════════════════════
+     LOGIN PAGE
+════════════════════════════════════════════ -->
+<div id="loginContainer">
+
+    <!-- Left hero panel -->
+    <div class="login-hero" aria-hidden="true">
+        <div class="login-hero-bg"></div>
+        <div class="login-hero-grid"></div>
+        <div class="login-hero-logo">
+            <div class="login-hero-logo-circle">LS</div>
+            <span class="login-hero-logo-text">LeadSuccess</span>
+        </div>
+        <div class="login-hero-content">
+            <p class="login-hero-tagline">TWO-FACTOR AUTHENTICATION</p>
+            <div class="login-hero-headline">
+                <span id="heroText"></span><span class="login-hero-cursor"></span>
             </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6 space-y-6 fade-in">
-                <form id="loginForm" class="space-y-4">
-                    <div>
-                        <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" id="username" name="username" required
-                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" id="password" name="password" required
-                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-
-                    <div class="flex items-start">
-                        <input type="checkbox" id="privacyConsent" required
-                            class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded mt-1">
-                        <label for="privacyConsent" class="ml-2 block text-sm text-gray-700">
-                            I agree to the <a href="#" class="text-primary hover:underline">Privacy Policy</a>
-                            and consent to data processing.
-                        </label>
-                    </div>
-
-                    <button type="submit" id="loginBtn" disabled
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-400 cursor-not-allowed disabled:opacity-50 transition-all duration-200">
-                        <span id="loginBtnText">Sign In</span>
-                        <div id="loginSpinner" class="spinner ml-2 hidden"></div>
-                    </button>
-                </form>
-
-                <div class="text-center">
-                    <a href="#" class="text-sm text-primary hover:underline">Forgot your password?</a>
-                </div>
-
-                <div id="loginError"
-                    class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative"></div>
-            </div>
+            <p class="login-hero-sub">Secure your LeadSuccess Portal account with TOTP-based two-factor authentication.</p>
         </div>
     </div>
 
-    <div id="dashboardLayout" class="hidden min-h-screen bg-gray-50">
-        <header class="bg-white shadow">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-4">
-                    <div class="flex items-center">
-                        <div class="h-8 w-8 bg-primary rounded-full flex items-center justify-center mr-3">
-                            <span class="text-sm font-bold text-white">LS</span>
-                        </div>
-                        <h1 class="text-xl font-semibold text-gray-900">LeadSuccess Portal</h1>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span id="userDisplay" class="text-gray-700 font-medium"></span>
-                        <button onclick="logout()"
-                            class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="mb-8">
-                <nav class="flex space-x-8">
-                    <button onclick="showTab('overview')" data-tab="overview"
-                        class="tab-btn border-b-2 border-primary text-primary pb-2 px-1 text-sm font-medium">
-                        Overview
-                    </button>
-                    <button onclick="showTab('devices')" data-tab="devices"
-                        class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 pb-2 px-1 text-sm font-medium">
-                        Devices
-                    </button>
-                    <button onclick="showTab('sessions')" data-tab="sessions" style="display: none;"
-                        class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 pb-2 px-1 text-sm font-medium">
-                        Sessions
-                    </button>
-                </nav>
+    <!-- Right form panel -->
+    <div class="login-form-panel">
+        <div class="login-form-inner fade-up">
+            <div class="login-form-logo">
+                <div class="login-form-logo-circle">LS</div>
+                <span class="login-form-logo-text">LeadSuccess Portal</span>
             </div>
 
-            <div id="overviewTab" class="tab-content">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Account Information</h3>
-                        <div id="userInfo" class="space-y-3"></div>
-                    </div>
+            <h1 class="login-title">Welcome back</h1>
+            <p class="login-subtitle">Sign in to your account to continue</p>
 
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Security Status</h3>
-                        <div class="text-center py-8">
-                            <div id="securityIcon" class="text-4xl mb-4">🔒</div>
-                            <div id="securityStatus"
-                                class="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block">
-                                Account Secured
-                            </div>
-                            <div class="mt-4">
-                                <button onclick="show2FASetup()" id="setup2FABtn"
-                                    class="hidden bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                                    <i class="fas fa-shield-alt mr-2"></i>Enable 2FA
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- For DEBUG NO DISPLAY -->
-                        <div id="dbPasswordDisplay"
-                            class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <h4 class="text-sm font-semibold text-green-800 mb-2">
-                                <i class="fas fa-key mr-2"></i>Database Password Generated
-                            </h4>
-                            <p class="text-xs text-green-700 mb-2">Valid for 24 hours:</p>
-                            <div class="font-mono text-sm bg-white p-2 rounded border" id="dbPasswordValue"></div>
-                            <button onclick="copyDBPassword()"
-                                class="mt-2 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition-colors">
-                                Copy Password
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <div id="loginErrorBanner" class="login-error-banner">
+                <span>⚠</span>
+                <span id="loginErrorText"></span>
             </div>
 
-            <div id="devicesTab" class="tab-content hidden">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Authentication Devices</h3>
-                        <button onclick="addNewDevice()"
-                            class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                            <i class="fas fa-plus mr-2"></i>Add Device
-                        </button>
-                    </div>
-                    <div id="devicesList"></div>
+            <form id="loginForm">
+                <div class="login-field">
+                    <label class="login-field-label" for="username">Username <span>*</span></label>
+                    <input type="text" id="username" name="username" class="input" placeholder="Enter your username" required>
                 </div>
-            </div>
-
-            <div id="sessionsTab" class="tab-content hidden">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Active Sessions</h3>
-                        <button onclick="logoutAllSessions()"
-                            class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors group">
-                            <i class="fas fa-sign-out-alt mr-2 group-hover:animate-pulse"></i>
-                            <span>Logout Other Sessions</span>
-                        </button>
-                    </div>
-                    <div id="sessionsList"></div>
+                <div class="login-field">
+                    <label class="login-field-label" for="password">Password <span>*</span></label>
+                    <input type="password" id="password" name="password" class="input" placeholder="Enter your password" required>
                 </div>
-            </div>
-        </main>
-    </div>
-
-    <div id="setup2FAModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto fade-in">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900">Setup Two-Factor Authentication</h3>
-                    <button onclick="closeModal('setup2FAModal')" class="text-gray-400 hover:text-gray-600">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
+                <div class="login-consent">
+                    <input type="checkbox" id="privacyConsent" class="login-consent-check" required>
+                    <label for="privacyConsent" class="login-consent-text">
+                        I agree to the <a href="#">Privacy Policy</a> and consent to data processing.
+                    </label>
                 </div>
+                <button type="submit" id="loginBtn" class="btn-primary-lg" disabled>
+                    <span id="loginBtnText">SIGN IN</span>
+                </button>
+            </form>
 
-                <div class="space-y-4">
-                    <div class="text-center">
-                        <div id="qrCodeContainer" class="mb-4 qr-code-container">
-                            <img id="qrCodeImage" src="" alt="QR Code" class="mx-auto max-w-full h-auto"
-                                style="display: none;">
-                            <div id="qrCodeLoading"
-                                class="w-36 h-36 mx-auto border rounded bg-gray-100 flex items-center justify-center">
-                                <span class="text-gray-500">Loading QR Code...</span>
-                            </div>
-                        </div>
+            <div class="login-divider"><span>or</span></div>
+            <button class="btn-google" id="googleLoginBtn" onclick="loginWithGoogle()">
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M47.532 24.552c0-1.636-.142-3.2-.408-4.704H24.48v8.896h12.928c-.556 3.008-2.248 5.56-4.792 7.272v6.048h7.76c4.544-4.184 7.156-10.344 7.156-17.512z" fill="#4285F4"/>
+                    <path d="M24.48 48c6.48 0 11.92-2.152 15.888-5.832l-7.76-6.048c-2.152 1.44-4.904 2.296-8.128 2.296-6.256 0-11.552-4.224-13.44-9.896H2.96v6.24C6.912 42.688 15.128 48 24.48 48z" fill="#34A853"/>
+                    <path d="M11.04 28.52A14.4 14.4 0 0 1 10.32 24c0-1.576.272-3.104.72-4.52V13.24H2.96A23.96 23.96 0 0 0 .48 24c0 3.864.928 7.52 2.48 10.76l8.08-6.24z" fill="#FBBC05"/>
+                    <path d="M24.48 9.584c3.52 0 6.672 1.208 9.152 3.584l6.864-6.864C36.392 2.392 30.96 0 24.48 0 15.128 0 6.912 5.312 2.96 13.24l8.08 6.24c1.888-5.672 7.184-9.896 13.44-9.896z" fill="#EA4335"/>
+                </svg>
+                Sign in with Google
+            </button>
 
-                        <div class="bg-gray-50 p-3 rounded text-sm">
-                            <p class="text-gray-600 mb-2">Manual entry key:</p>
-                            <code id="manualKey"
-                                class="block bg-white p-2 rounded border font-mono text-xs break-all">Loading...</code>
-                            <button onclick="copyManualKey()" id="copyKeyBtn"
-                                class="mt-2 text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition-colors">
-                                Copy Key
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="text-sm text-gray-600">
-                        <p class="font-medium mb-2">Instructions:</p>
-                        <ol class="list-decimal pl-4 space-y-1">
-                            <li>Open your authenticator app (Google Authenticator, Microsoft AUth, etc.)</li>
-                            <li>Scan the QR code above or enter the key manually</li>
-                            <li>Enter the 6-digit code from your app below</li>
-                            <li>Enter the device name below</li>
-                        </ol>
-                    </div>
-
-                    <form id="setup2FAForm" class="space-y-4">
-
-                        <!-- Device  Name Input -->
-                         <div>
-                            <label for="deviceName" class="block text-sm font-medium text-gray-700">
-                                Device Name <span class="text-red-500">*</span>
-                            </label>
-                            <input 
-                                type="text" 
-                                id="deviceName" 
-                                name="deviceName" 
-                                required
-                                minlength="3"
-                                maxlength="50"
-                                placeholder="e.g., John's iPhone, Work Laptop"
-                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                            >
-                            <p class="mt-1 text-xs text-gray-500">Minimum 3 characters required</p>
-                        </div>
-
-                        <!-- Verification Code Input -->
-                        <div>
-                            <label 
-                                for="setupCode" 
-                                class="block text-sm font-medium text-gray-700">Verification  Code
-                            </label>
-                            <input 
-                                type="text" 
-                                id="setupCode" 
-                                maxlength="6" 
-                                pattern="[0-9]{6}" 
-                                required
-                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-center text-lg tracking-widest focus:outline-none focus:ring-primary focus:border-primary"
-                                placeholder="123456">
-                        </div>
-
-
-                        <button disabled type="submit" id="setupBtn" 
-                            class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md text-sm font-medium transition-colors">
-                            <span id="setupBtnText">Enable 2FA</span>
-                            <div id="setupSpinner" class="spinner ml-2 hidden"></div>
-                        </button>
-                    </form>
-
-                    <!-- Enhanced Error Display -->
-                    <div id="setupError" class="hidden bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded">
-                    </div>
-                </div>
+            <div class="login-footer">
+                <a href="#">Forgot your password?</a>
             </div>
         </div>
     </div>
+</div>
 
-    <div id="verify2FAModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full fade-in">
-            <div class="p-6">
-                <div class="text-center mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Two-Factor Authentication</h3>
-                    <p class="text-gray-600">Enter the 6-digit code from your authenticator app</p>
-                </div>
+<!-- ════════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════════ -->
+<div id="dashboardLayout">
 
-                <form id="verify2FAForm" class="space-y-4">
-                    <div>
-                        <input type="text" id="verifyCode" maxlength="6" pattern="[0-9]{6}" required
-                            placeholder="000000"
-                            class="block w-full px-3 py-3 border border-gray-300 rounded-md text-center text-xl tracking-widest focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-
-                    <button type="submit" id="verifyBtn"
-                        class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md font-medium transition-colors">
-                        <span id="verifyBtnText">Verify</span>
-                        <div id="verifySpinner" class="spinner ml-2 hidden"></div>
-                    </button>
-                </form>
-
-                <div id="verifyError"
-                    class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded"></div>
-            </div>
+    <!-- Header -->
+    <header class="dash-header">
+        <div class="dash-header-left">
+            <div class="dash-logo-circle">LS</div>
+            <span class="dash-title">LeadSuccess Portal</span>
         </div>
-    </div>
+        <div class="dash-header-right">
+            <span id="userDisplay" class="dash-username"></span>
+            <!-- Theme toggle -->
+            <button class="btn-icon" id="themeToggle" title="Toggle dark/light mode">
+                <svg class="theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <svg class="theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            </button>
+            <button class="dash-logout" onclick="logout()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Logout
+            </button>
+        </div>
+    </header>
 
-    <div id="lastDeviceModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full fade-in">
-            <div class="p-6">
-                <div class="flex items-center mb-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                            <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
-                        </div>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Remove Last Device</h3>
-                        <p class="text-sm text-gray-600 mt-1">This action will disable 2FA</p>
-                    </div>
+    <!-- Tab navigation -->
+    <nav class="dash-tabs">
+        <button class="dash-tab active" data-tab="overview" onclick="showTab('overview')">Overview</button>
+        <button class="dash-tab" data-tab="devices"  onclick="showTab('devices')">Devices</button>
+        <button class="dash-tab" data-tab="sessions" onclick="showTab('sessions')">Sessions</button>
+    </nav>
+
+    <!-- Main content -->
+    <main class="dash-main">
+
+        <!-- Overview tab -->
+        <div id="overviewTab" class="tab-content active">
+            <div class="overview-grid">
+                <!-- Account info card -->
+                <div class="card">
+                    <div class="card-title">Account Information</div>
+                    <div id="userInfo"></div>
                 </div>
-
-                <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle text-red-400"></i>
-                        </div>
-                        <div class="ml-3">
-                            <h4 class="text-sm font-medium text-red-800">Warning</h4>
-                            <div class="mt-2 text-sm text-red-700">
-                                <p>You are about to remove your last authentication device:</p>
-                                <p class="font-medium mt-1 utf8-support" id="lastDeviceName"></p>
-                                <p class="mt-2">This will:</p>
-                                <ul class="list-disc pl-5 mt-1 space-y-1">
-                                    <li>Completely disable two-factor authentication</li>
-                                    <li>Remove all authentication devices</li>
-                                    <li>Reset your login to use only your original password</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="text-sm text-gray-600 mb-6">
-                    <p class="font-medium">Are you absolutely sure you want to continue?</p>
-                    <p class="mt-1">This action cannot be undone.</p>
-                </div>
-
-                <div class="flex space-x-3">
-                    <button onclick="closeModal('lastDeviceModal')"
-                        class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors">
-                        Cancel
-                    </button>
-                    <button onclick="confirmRemoveLastDevice()"
-                        class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md font-medium transition-colors">
-                        Yes, Remove Device
-                    </button>
+                <!-- Security status card -->
+                <div class="card security-card">
+                    <div id="securityIcon" class="security-icon"></div>
+                    <div id="securityStatus"></div>
+                    <div id="securityActions" class="security-actions"></div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div id="errorModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full fade-in">
-            <div class="p-6">
-                <div class="flex items-center mb-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                            <i class="fas fa-exclamation-circle text-red-600 text-xl"></i>
-                        </div>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Error</h3>
-                        <p class="text-sm text-gray-600 mt-1">An error occurred</p>
-                    </div>
-                </div>
-
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                    <p class="text-red-700 text-sm" id="errorModalMessage"></p>
-                </div>
-
-                <div class="flex justify-end">
-                    <button onclick="closeModal('errorModal')"
-                        class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md font-medium transition-colors">
-                        OK
+        <!-- Devices tab -->
+        <div id="devicesTab" class="tab-content">
+            <div class="card" style="padding:24px;">
+                <div class="devices-header">
+                    <span class="devices-title">Authentication Devices</span>
+                    <button class="btn btn-primary" onclick="addNewDevice()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Device
                     </button>
                 </div>
+                <div id="devicesList"></div>
             </div>
         </div>
-    </div>
 
-    <div id="passwordModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full fade-in">
-            <div class="p-6">
-                <div class="flex items-center mb-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <i class="fas fa-key text-blue-600 text-xl"></i>
-                        </div>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Authentication Required</h3>
-                        <p class="text-sm text-gray-600 mt-1" id="passwordModalMessage">Enter your password to continue
-                        </p>
-                    </div>
+        <!-- Sessions tab -->
+        <div id="sessionsTab" class="tab-content">
+            <div class="card" style="padding:24px;">
+                <div class="sessions-header">
+                    <span class="devices-title">Active Sessions</span>
+                    <button class="btn btn-danger" onclick="logoutAllSessions()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Logout Other Sessions
+                    </button>
                 </div>
-
-                <form id="passwordModalForm" class="space-y-4">
-                    <div>
-                        <label for="modalPassword" class="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" id="modalPassword" required
-                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-
-                    <div class="flex space-x-3">
-                        <button type="button" onclick="closeModal('passwordModal')"
-                            class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                            class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-md font-medium transition-colors">
-                            Continue
-                        </button>
-                    </div>
-                </form>
+                <div id="sessionsList"></div>
             </div>
         </div>
-    </div>
 
-    <div id="successModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full fade-in">
-            <div class="p-6 text-center">
-                <div class="text-green-500 text-4xl mb-4">
-                    <i class="fas fa-check-circle"></i>
+    </main>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: 2FA Login Verify (OTP slots)
+════════════════════════════════════════════ -->
+<div id="verify2FAModal" class="modal-overlay hidden">
+    <div class="modal-panel scale-in" style="max-width:420px; padding:0; overflow:hidden; position:relative;">
+
+        <!-- Header -->
+        <div class="v2fa-header">
+            <div class="v2fa-shield-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" fill="rgba(16,185,129,0.3)" stroke="#10b981" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M9 12l2 2 4-4" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="v2fa-header-text">
+                <h2>Two-Factor Authentication</h2>
+                <p>Enter the 6-digit code from your authenticator app</p>
+            </div>
+        </div>
+
+        <div class="v2fa-body">
+            <!-- Collapsible QR section (shown only when QR is available) -->
+            <div id="v2faQRSection" style="display:none;">
+                <div class="v2fa-qr-toggle" id="v2faQRToggle" onclick="toggleVerifyQR()">
+                    <div class="v2fa-qr-toggle-left">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1" fill="currentColor"/></svg>
+                        Set up authenticator app
+                    </div>
+                    <div class="v2fa-qr-toggle-arrow"></div>
                 </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2" id="successTitle">Success!</h3>
-                <p class="text-gray-600 mb-6" id="successMessage"></p>
-                <button onclick="closeModal('successModal')"
-                    class="bg-primary hover:bg-primary-dark text-white py-2 px-6 rounded-md font-medium transition-colors">
-                    OK
+                <div class="v2fa-qr-panel" id="v2faQRPanel">
+                    <img id="v2faQRImage" src="" alt="QR Code">
+                    <p>Scan with <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP app.</p>
+                </div>
+            </div>
+
+            <!-- TOTP timer + demo code (dev only) -->
+            <div class="v2fa-demo-box" id="v2faDemoBox" style="display:none;">
+                <div class="v2fa-timer" id="v2faTimer">
+                    <svg width="44" height="44" viewBox="0 0 44 44">
+                        <circle class="v2fa-timer-track" cx="22" cy="22" r="18"/>
+                        <circle class="v2fa-timer-fill" id="v2faTimerFill" cx="22" cy="22" r="18"/>
+                    </svg>
+                    <div class="v2fa-timer-text" id="v2faTimerText">30</div>
+                </div>
+                <div class="v2fa-demo-info">
+                    <div class="v2fa-demo-label">DEMO CODE</div>
+                    <div class="v2fa-demo-code" id="v2faDemoCode">— — —&nbsp;&nbsp;— — —</div>
+                </div>
+                <div class="v2fa-demo-refresh" onclick="refreshDemoCode()" title="Refresh">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </div>
+            </div>
+
+            <!-- OTP Slots -->
+            <div class="otp-wrapper" id="otpWrapper" onclick="document.getElementById('otpRealInput').focus()">
+                <div class="otp-slot" data-index="0"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+                <div class="otp-slot" data-index="1"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+                <div class="otp-slot" data-index="2"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+                <div class="otp-separator"></div>
+                <div class="otp-slot" data-index="3"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+                <div class="otp-slot" data-index="4"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+                <div class="otp-slot" data-index="5"><div class="otp-caret"></div><span class="otp-digit"></span></div>
+            </div>
+            <input id="otpRealInput" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+
+            <div id="verifyError" class="inline-error"></div>
+
+            <div style="display:flex; gap:10px; margin-top:4px;">
+                <button class="btn btn-outline" style="flex:1; height:44px;" onclick="closeModal('verify2FAModal')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                    Back
+                </button>
+                <button id="verifyBtn" class="btn btn-primary" style="flex:2; height:44px; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;" onclick="submitVerify2FA()">
+                    VERIFY
                 </button>
             </div>
         </div>
     </div>
+</div>
 
-    <div id="loadingModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 modal-overlay flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg p-6 fade-in">
-            <div class="flex items-center space-x-3">
-                <div class="spinner"></div>
-                <span id="loadingText" class="text-gray-700 font-medium">Processing...</span>
+<!-- ════════════════════════════════════════════
+     MODAL: Setup 2FA
+════════════════════════════════════════════ -->
+<div id="tfaSetupModal" class="modal-overlay hidden">
+    <div class="modal-panel scale-in" style="max-width:460px; padding:0; overflow:hidden; position:relative;">
+        <div class="v2fa-header" style="padding-right:52px;">
+            <div class="v2fa-shield-icon" style="background:rgba(216,97,65,0.15);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" fill="rgba(216,97,65,0.25)" stroke="#D86141" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M12 8v4m0 4h.01" stroke="#D86141" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="v2fa-header-text">
+                <h2>Setup Two-Factor Authentication</h2>
+                <p>Secure your account with a TOTP authenticator app</p>
+            </div>
+            <button class="modal-close" onclick="closeSetupModal()" style="position:absolute;top:16px;right:16px;">×</button>
+        </div>
+        <div class="modal-body" id="tfaSetupContent" style="padding:20px 28px 28px;">
+            <div style="text-align:center; padding:32px 0;">
+                <div class="spinner spinner-accent" style="width:28px;height:28px;margin:0 auto 12px;"></div>
+                <p style="font-size:14px; color:var(--text-muted);">Setting up 2FA...</p>
             </div>
         </div>
     </div>
+</div>
 
-    <script>
+<!-- ════════════════════════════════════════════
+     MODAL: Remove Device
+════════════════════════════════════════════ -->
+<div id="removeDeviceModal" class="modal-overlay hidden">
+    <div class="modal-panel scale-in">
+        <div class="modal-header">
+            <div class="modal-title">
+                <div class="modal-title-icon" style="background:var(--destructive-dim)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </div>
+                Remove Device
+            </div>
+            <button class="modal-close" onclick="closeModal('removeDeviceModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="removeDeviceWarning"></div>
+            <div class="form-group">
+                <div class="form-label">Account</div>
+                <div id="removeDeviceUsername" class="form-readonly"></div>
+            </div>
+            <div class="form-group">
+                <div class="form-label">Device to Remove</div>
+                <div id="removeDeviceName" class="form-readonly"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="removeDevicePassword">Password *</label>
+                <input type="password" id="removeDevicePassword" class="input-sm" style="width:100%;" placeholder="Enter your password to confirm">
+            </div>
+            <div id="removeDeviceError" class="inline-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('removeDeviceModal')">Cancel</button>
+                <button id="removeDeviceBtn" class="btn btn-danger" onclick="submitRemoveDevice()">
+                    <span id="removeDeviceBtnText">Remove</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Configuration API
-        if (typeof window.AppConfig === 'undefined') {
-            console.error('❌ AppConfig not loaded! Check environment configuration.');
-            alert('Configuration error. Please refresh the page.');
+<!-- ════════════════════════════════════════════
+     MODAL: Disable 2FA
+════════════════════════════════════════════ -->
+<div id="disable2FAModal" class="modal-overlay hidden">
+    <div class="modal-panel scale-in">
+        <div class="modal-header">
+            <div class="modal-title">
+                <div class="modal-title-icon" style="background:var(--destructive-dim)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                </div>
+                Disable 2FA
+            </div>
+            <button class="modal-close" onclick="closeModal('disable2FAModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="warning-box">
+                <div class="warning-box-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                <div>
+                    <div class="warning-box-title">Security Warning</div>
+                    <div class="warning-box-text">Disabling 2FA will make your account significantly less secure. You will only need your password to log in.</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="form-label">Account</div>
+                <div id="disable2FAUsername" class="form-readonly"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="disable2FAPassword">Password *</label>
+                <input type="password" id="disable2FAPassword" class="input-sm" style="width:100%;" placeholder="Enter your password to confirm">
+            </div>
+            <div id="disable2FAError" class="inline-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('disable2FAModal')">Cancel</button>
+                <button id="disable2FABtn" class="btn btn-danger" onclick="submitDisable2FA()">
+                    <span id="disable2FABtnText">Disable 2FA</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     LOADING OVERLAY
+════════════════════════════════════════════ -->
+<div id="loadingOverlay">
+    <div class="spinner" style="width:32px;height:32px;border-width:3px;"></div>
+    <span id="loadingText">Processing...</span>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TOAST
+════════════════════════════════════════════ -->
+<div id="toast" class="hidden"></div>
+
+<script>
+    /* ═══════════════════════════════════════
+       CONFIG & STATE
+    ═══════════════════════════════════════ */
+    if (typeof window.AppConfig === 'undefined') alert('Configuration error. Please refresh.');
+    const API = window.AppConfig.api.baseURL;
+
+    let currentUser        = null;
+    let sessionToken       = null;
+    let currentUserPassword = null;
+    let setupSessionToken  = null;
+    let pendingRemove      = null;  // { deviceId, deviceName, isLastDevice }
+    let otpValue           = '';
+
+    /* ═══════════════════════════════════════
+       THEME
+    ═══════════════════════════════════════ */
+    (function initTheme() {
+        const saved = localStorage.getItem('ls-theme');
+        if (saved === 'light') document.documentElement.classList.add('light');
+    })();
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+        const isLight = document.documentElement.classList.toggle('light');
+        localStorage.setItem('ls-theme', isLight ? 'light' : 'dark');
+    });
+
+    /* ═══════════════════════════════════════
+       HERO ANIMATION
+    ═══════════════════════════════════════ */
+    (function heroTyping() {
+        const phrases = ['Connect.', 'Transfer.', 'Convert.'];
+        const el = document.getElementById('heroText');
+        if (!el) return;
+        let pi = 0, ci = 0, typing = true, timeout;
+
+        function tick() {
+            const phrase = phrases[pi];
+            if (typing) {
+                el.textContent = phrase.slice(0, ++ci);
+                if (ci < phrase.length) { timeout = setTimeout(tick, 45); }
+                else { timeout = setTimeout(() => { typing = false; tick(); }, 1800); }
+            } else {
+                el.textContent = phrase.slice(0, --ci);
+                if (ci > 0) { timeout = setTimeout(tick, 28); }
+                else {
+                    pi = (pi + 1) % phrases.length;
+                    typing = true;
+                    timeout = setTimeout(tick, 300);
+                }
+            }
         }
+        tick();
+    })();
 
-        const API_BASE_URL = window.AppConfig.api.baseURL;
+    /* ═══════════════════════════════════════
+       GOOGLE OAUTH
+    ═══════════════════════════════════════ */
+    function loginWithGoogle() {
+        const base = window.AppConfig.api.baseURL.replace('/api/v1', '');
+        window.location.href = `${base}/api/v1/auth/google`;
+    }
 
-        // Application state
-        let currentUser = null;
-        let sessionToken = null;
-        let currentSetupData = null;
-        let pendingDeviceRemoval = null;
-        let currentUserPassword = null;
-        let setupSessionToken = null
+    function checkGoogleReturn() {
+        const params = new URLSearchParams(window.location.search);
+        const token    = params.get('token');
+        const step     = params.get('step');
+        const error    = params.get('error');
+        const username = params.get('username');
 
-        // Initialization
-        document.addEventListener('DOMContentLoaded', function () {
-            initializeApp();
+        if (token || error) {
+            window.history.replaceState({}, '', window.location.pathname);
+            handleGoogleResult({ token, step, error, username });
+        }
+    }
+
+    function handleGoogleResult(data) {
+        const { token, step, error, username, linked, googleLinked, googleError, googleToken } = data;
+        const errMsg = error || googleError;
+        const tok = token || googleToken;
+        const isLinked = linked || googleLinked;
+
+        if (errMsg) {
+            if (currentUser && sessionToken) {
+                showToast(decodeURIComponent(errMsg), 'error');
+            } else {
+                showBanner('loginErrorBanner', 'loginErrorText', decodeURIComponent(errMsg));
+            }
+            return;
+        }
+        if (isLinked) {
+            showToast('Google account linked successfully!', 'success');
+            loadCurrentUser();
+            return;
+        }
+        if (!tok) return;
+        sessionToken = tok;
+        currentUserPassword = null;
+        currentUser = { username: username || '' };
+        if (step === 'verify_2fa') {
+            openVerify2FA(null);
+        } else {
+            showDashboard({ success: true, user: { username: username || '' } });
+        }
+    }
+
+
+    /* ═══════════════════════════════════════
+       INIT
+    ═══════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', () => {
+        checkGoogleReturn();
+        document.getElementById('privacyConsent').addEventListener('change', function() {
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = !this.checked;
         });
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        initOTPSlots();
+    });
 
-        function initializeApp() {
-            setupEventListeners();
+    /* ═══════════════════════════════════════
+       API
+    ═══════════════════════════════════════ */
+    async function apiRequest(method, endpoint, data = null, retries = 2) {
+        const options = {
+            method,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(window.AppConfig.api.timeout)
+        };
+        if (sessionToken) options.headers['X-Session-Token'] = sessionToken;
+        if (data && method !== 'GET') options.body = JSON.stringify(data);
+        try {
+            const res = await fetch(`${API}${endpoint}`, options);
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message || `Error ${res.status}`);
+            return result;
+        } catch (err) {
+            if (retries > 0 && (err.name === 'NetworkError' || err.name === 'TimeoutError')) {
+                await sleep(1000);
+                return apiRequest(method, endpoint, data, retries - 1);
+            }
+            throw err;
         }
+    }
 
-        function setupEventListeners() {
-            // Privacy consent checkbox
-            document.getElementById('privacyConsent').addEventListener('change', function () {
-                const loginBtn = document.getElementById('loginBtn');
-                if (this.checked) {
-                    loginBtn.disabled = false;
-                    loginBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                    loginBtn.classList.add('bg-primary', 'hover:bg-primary-dark');
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    /* ═══════════════════════════════════════
+       LOGIN
+    ═══════════════════════════════════════ */
+    async function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        currentUserPassword = password;
+
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner spinner-sm"></div>';
+        hideBanner('loginErrorBanner');
+
+        try {
+            const result = await apiRequest('POST', '/auth/login', { username, password });
+            if (result.success) {
+                sessionToken = result.sessionToken;
+                currentUser  = result.user || { username };
+                if (result.nextStep === 'verify_2fa') {
+                    openVerify2FA();
                 } else {
-                    loginBtn.disabled = true;
-                    loginBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                    loginBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
-                }
-            });
-
-            // Form listeners
-            document.getElementById('loginForm').addEventListener('submit', handleLogin);
-            document.getElementById('setup2FAForm').addEventListener('submit', handleSetup2FA);
-            document.getElementById('verify2FAForm').addEventListener('submit', handleVerify2FA);
-            document.getElementById('passwordModalForm').addEventListener('submit', handlePasswordModal);
-
-            // Auto-submit verification codes
-            document.getElementById('verifyCode').addEventListener('input', function (e) {
-                if (e.target.value.length === 6) {
-                    setTimeout(() => {
-                        document.getElementById('verify2FAForm').dispatchEvent(new Event('submit'));
-                    }, 100);
-                }
-            });
-
-            document.getElementById('setupCode').addEventListener('input', function (e) {
-                if (e.target.value.length === 6) {
-                    setTimeout(() => {
-                        document.getElementById('setup2FAForm').dispatchEvent(new Event('submit'));
-                    }, 100);
-                }
-            });
-
-            // Setup 2FA form validation for device name + TOTP code
-            const deviceNameInput = document.getElementById('deviceName');
-            const setupCodeInput = document.getElementById('setupCode');
-            const setupBtn = document.getElementById('setupBtn');
-
-            function validateSetupForm() {
-                const deviceName = deviceNameInput?.value?.trim() || '';
-                const setupCode = setupCodeInput?.value?.trim() || '';
-
-                const isDeviceNameValid = deviceName.length >= 3;
-                const isCodeValid = /^\d{6}$/.test(setupCode);
-                
-                if (setupBtn) {
-                    if (isDeviceNameValid && isCodeValid) {
-                        setupBtn.disabled = false;
-                        setupBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                        setupBtn.classList.add('bg-primary', 'hover:bg-primary-dark');
-                    } else {
-                        setupBtn.disabled = true;
-                        setupBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                        setupBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
-                    }
-                }
-            }
-            // Add validation listeners only if elements exist
-            if (deviceNameInput) {
-                deviceNameInput.addEventListener('input', validateSetupForm);
-                deviceNameInput.addEventListener('blur', validateSetupForm);
-            }
-
-            if (setupCodeInput) {
-                // Remove the auto-submit for setup code since we need both fields
-                setupCodeInput.removeEventListener('input', function (e) {
-                    if (e.target.value.length === 6) {
-                        setTimeout(() => {
-                            document.getElementById('setup2FAForm').dispatchEvent(new Event('submit'));
-                        }, 100);
-                    }
-                });
-
-                // Add validation instead
-                setupCodeInput.addEventListener('input', validateSetupForm);
-            }
-
-        }
-
-        // API Helper Functions
-        async function apiRequest(method, endpoint, data = null, retries = 2) {
-            const url = `${API_BASE_URL}${endpoint}`;
-
-            const options = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                signal: AbortSignal.timeout(window.AppConfig.api.timeout)
-            };
-
-            if (sessionToken) {
-                options.headers['X-Session-Token'] = sessionToken;
-            }
-
-            if (data && method !== 'GET') {
-                options.body = JSON.stringify(data);
-                console.log('🔍 CLIENT REQUEST:', {
-                method,
-                endpoint,
-                headers: options.headers,
-                body: options.body
-        });
-            }
-
-            try {
-                const response = await fetch(url, options);
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.message || `Request failed with status ${response.status}`);
-                }
-                return result;
-
-            } catch (error) {
-
-                if (retries > 0 && (error.name === 'NetworkError' || error.name === 'TimeoutError')) {
-                    console.warn(`🔄 Retrying API request (${retries} retries left):`, endpoint);
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-                    return apiRequest(method, endpoint, data, retries - 1);
-                }
-
-                throw error;
-
-            }
-        }
-
-        //  error handling 
-        function showErrorModal(message) {
-            document.getElementById('errorModalMessage').textContent = message;
-            showModal('errorModal');
-        }
-
-        // Password input modal
-        function requestPassword(message = 'Enter your password to continue') {
-            return new Promise((resolve, reject) => {
-                // Use stored password if available
-                if (currentUserPassword) {
-                    resolve(currentUserPassword);
-                    return;
-                }
-
-                document.getElementById('passwordModalMessage').textContent = message;
-                document.getElementById('modalPassword').value = '';
-                showModal('passwordModal');
-
-                // Set up one-time event listener
-                function handlePasswordSubmit(e) {
-                    e.preventDefault();
-                    const password = document.getElementById('modalPassword').value;
-                    if (password) {
-                        currentUserPassword = password; // Store for future use
-                        closeModal('passwordModal');
-                        resolve(password);
-                    } else {
-                        showErrorModal("Password cannot be empty.");
-                        reject(new Error("Password cannot be empty."));
-                    }
-                    document.getElementById('passwordModalForm').removeEventListener('submit', handlePasswordSubmit);
-                }
-
-                document.getElementById('passwordModalForm').addEventListener('submit', handlePasswordSubmit);
-            });
-        }
-
-        function handlePasswordModal(e) {
-            e.preventDefault();
-            // Handled by requestPassword function
-        }
-
-        // Authentication handlers
-        async function handleLogin(e) {
-            e.preventDefault();
-
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            // Store password for session
-            currentUserPassword = password;
-
-            setLoadingState('loginBtn', true);
-            hideError('loginError');
-
-            try {
-                const result = await apiRequest('POST', '/auth/login', { username, password });
-
-                if (result.success) {
-                    sessionToken = result.sessionToken;
-                    currentUser = result.user;
-
-                    if (result.nextStep === 'verify_2fa') {
-                        showVerify2FA();
-                    } else {
-                        showDashboard(result);
-                    }
-                }
-            } catch (error) {
-                showError('loginError', error.message);
-            } finally {
-                setLoadingState('loginBtn', false);
-            }
-        }
-
-        async function handleVerify2FA(e) {
-            e.preventDefault();
-
-            const code = document.getElementById('verifyCode').value;
-
-            setLoadingState('verifyBtn', true);
-            hideError('verifyError');
-
-            try {
-                const tokenToUse = setupSessionToken || sessionToken;
-                 console.log('🔧 Using token for 2FA verification:', tokenToUse ? tokenToUse.substring(0, 8) + '...' : 'NO TOKEN');
-                console.log('🔧 Context - setupSessionToken:', setupSessionToken ? 'EXISTS' : 'NULL');
-                console.log('🔧 Context - sessionToken:', sessionToken ? 'EXISTS' : 'NULL');
-
-
-                const result = await apiRequest('POST', '/auth/verify-2fa', {
-                    sessionToken : tokenToUse,
-                    totpCode: code
-                });
-
-                if (result.success) {
-                    closeModal('verify2FAModal');
-
-                    if (result.sessionToken) {
-                        sessionToken = result.sessionToken;
-                        console.log('🔧 Session token updated from 2FA verification:', sessionToken.substring(0, 8) + '...');
-                    }
-
-                    if (result.dbPassword) {
-                        showDBPassword(result.dbPassword);
-                    }
-
                     showDashboard(result);
                 }
-            } catch (error) {
-                showError('verifyError', error.message);
-                document.getElementById('verifyCode').value = '';
-                document.getElementById('verifyCode').focus();
-            } finally {
-                setLoadingState('verifyBtn', false);
             }
+        } catch (err) {
+            showBanner('loginErrorBanner', 'loginErrorText', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span id="loginBtnText">SIGN IN</span>';
+        }
+    }
+
+    /* ═══════════════════════════════════════
+       OTP SLOTS
+    ═══════════════════════════════════════ */
+    function initOTPSlots() {
+        const real = document.getElementById('otpRealInput');
+        if (!real) return;
+
+        real.addEventListener('input', (e) => {
+            otpValue = e.target.value.replace(/\D/g, '').slice(0, 6);
+            e.target.value = otpValue;
+            renderOTPSlots(otpValue);
+            if (otpValue.length === 6) submitVerify2FA();
+        });
+        real.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && otpValue.length === 6) submitVerify2FA();
+        });
+    }
+
+    function renderOTPSlots(value) {
+        const slots = document.querySelectorAll('.otp-slot');
+        slots.forEach((slot, i) => {
+            const digit = value[i] || '';
+            const digitEl = slot.querySelector('.otp-digit');
+            digitEl.textContent = digit;
+            slot.classList.toggle('filled', digit !== '');
+            slot.classList.toggle('active', i === value.length && value.length < 6);
+        });
+    }
+
+    /* ═══════════════════════════════════════
+       VERIFY 2FA MODAL — timer + QR toggle
+    ═══════════════════════════════════════ */
+    let _totpTimer = null;
+
+    function openVerify2FA(qrDataUrl) {
+        otpValue = '';
+        document.getElementById('otpRealInput').value = '';
+        renderOTPSlots('');
+        document.querySelectorAll('.otp-slot')[0]?.classList.add('active');
+        hideInlineError('verifyError');
+
+        // QR section — only if a QR url is passed (setup flow)
+        const qrSection = document.getElementById('v2faQRSection');
+        if (qrDataUrl) {
+            document.getElementById('v2faQRImage').src = qrDataUrl;
+            qrSection.style.display = '';
+        } else {
+            qrSection.style.display = 'none';
+            document.getElementById('v2faQRPanel').classList.remove('open');
+            document.getElementById('v2faQRToggle')?.classList.remove('open');
         }
 
-        async function show2FASetup() {
-            if (!currentUser) return;
-
-            try {
-                showLoadingModal('Setting up 2FA...');
-
-                const result = await apiRequest('POST', '/auth/setup-2fa', {
-                    username: currentUser.username,
-                    password: currentUserPassword,
-                    deviceInfo: 'Web Browser'
-                });
-
-                if (result.success) {
-                    currentSetupData = result;
-                    setupSessionToken = result.sessionToken;
-
-                    console.log('🔧 Setup session token stored:', setupSessionToken.substring(0, 8) + '...');
-
-
-                    const qrImg = document.getElementById('qrCodeImage');
-                    const qrLoading = document.getElementById('qrCodeLoading');
-                    const manualKey = document.getElementById('manualKey');
-
-                    qrImg.src = result.totpSetup.qrCodeDataURL;
-                    qrImg.style.display = 'block';
-                    qrLoading.style.display = 'none';
-                    manualKey.textContent = result.totpSetup.secret;
-
-                    hideLoadingModal();
-                    resetSetupModal();
-                    showModal('setup2FAModal');
-
-                    //Focus on device name input
-                    document.getElementById('deviceName').focus();
-                }
-            } catch (error) {
-                hideLoadingModal();
-                showErrorModal(error.message);
-            }
+        // Show demo code box only in dev
+        const demoBox = document.getElementById('v2faDemoBox');
+        if (!window.AppConfig.isProduction) {
+            demoBox.style.display = '';
+            startTOTPTimer();
+        } else {
+            demoBox.style.display = 'none';
         }
 
+        openModal('verify2FAModal');
+        setTimeout(() => document.getElementById('otpRealInput').focus(), 100);
+    }
 
-        async function handleSetup2FA(e) {
-            e.preventDefault();
+    function startTOTPTimer() {
+        if (_totpTimer) clearInterval(_totpTimer);
+        updateTOTPDisplay();
+        _totpTimer = setInterval(updateTOTPDisplay, 1000);
+    }
 
-            const deviceName = document.getElementById('deviceName').value.trim();
-            const code = document.getElementById('setupCode').value;
+    function updateTOTPDisplay() {
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = 30 - (now % 30);
+        const circumference = 113; // 2 * PI * 18
+        const offset = circumference * (1 - remaining / 30);
 
+        const fill = document.getElementById('v2faTimerFill');
+        const text = document.getElementById('v2faTimerText');
+        if (!fill || !text) return;
 
-            // Validate inputs
-            if (deviceName.length < 3) {
-                showError('setupError', 'Device name must be at least 3 characters long');
-                return;
+        fill.style.strokeDashoffset = offset;
+        fill.style.stroke = remaining <= 5 ? '#ef4444' : 'var(--accent)';
+        text.textContent = remaining;
+        text.style.color = remaining <= 5 ? '#ef4444' : 'var(--text)';
+    }
+
+    function refreshDemoCode() {
+        const codeEl = document.getElementById('v2faDemoCode');
+        if (!codeEl) return;
+        codeEl.style.opacity = '0.3';
+        setTimeout(() => { codeEl.style.opacity = '1'; }, 300);
+    }
+
+    function toggleVerifyQR() {
+        const toggle = document.getElementById('v2faQRToggle');
+        const panel  = document.getElementById('v2faQRPanel');
+        const isOpen = panel.classList.contains('open');
+        panel.classList.toggle('open', !isOpen);
+        toggle.classList.toggle('open', !isOpen);
+        toggle.querySelector('.v2fa-qr-toggle-left').childNodes[2].textContent =
+            isOpen ? ' Set up authenticator app' : ' Hide QR code';
+    }
+
+    async function submitVerify2FA() {
+        if (otpValue.length !== 6) return;
+        const btn = document.getElementById('verifyBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner spinner-sm"></div>';
+        hideInlineError('verifyError');
+        try {
+            const result = await apiRequest('POST', '/auth/verify-2fa', {
+                sessionToken,
+                totpCode: otpValue,
+                username: currentUser ? currentUser.username : undefined
+            });
+            if (result.success) {
+                closeModal('verify2FAModal');
+                if (result.sessionToken) sessionToken = result.sessionToken;
+                showDashboard(result);
             }
+        } catch (err) {
+            showInlineError('verifyError', err.message);
+            otpValue = '';
+            document.getElementById('otpRealInput').value = '';
+            renderOTPSlots('');
+            setTimeout(() => document.getElementById('otpRealInput').focus(), 50);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'VERIFY';
+        }
+    }
 
-            if (!/^\d{6}$/.test(code)) {
-                showError('setupError', 'Please enter a valid 6-digit code');
-                return;
+    /* ═══════════════════════════════════════
+       DASHBOARD
+    ═══════════════════════════════════════ */
+    function showDashboard(data) {
+        document.getElementById('loginContainer').style.display = 'none';
+        const dash = document.getElementById('dashboardLayout');
+        dash.classList.add('visible');
+        currentUser = data.user || currentUser;
+        document.getElementById('userDisplay').textContent = currentUser ? currentUser.username : '';
+        loadCurrentUser();
+        showTab('overview');
+    }
+
+    function showTab(name) {
+        document.querySelectorAll('.dash-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(name + 'Tab').classList.add('active');
+        if (name === 'devices')  loadDevices();
+        if (name === 'sessions') loadSessions();
+    }
+
+    async function loadCurrentUser() {
+        try {
+            const statusPayload = { username: currentUser.username };
+            if (currentUserPassword) statusPayload.password = currentUserPassword;
+            const r = await apiRequest('POST', '/auth/status', statusPayload);
+            if (r.success) {
+                currentUser = { ...currentUser, ...r };
+                renderUserInfo();
+                renderSecurityStatus();
             }
+        } catch (err) {
+            showToast('Failed to load user: ' + err.message, 'error');
+        }
+    }
 
-            setLoadingState('setupBtn', true);
-            hideError('setupError');
+    function renderUserInfo() {
+        const enabled = currentUser.is2FAEnabled;
+        document.getElementById('userInfo').innerHTML = `
+            <div class="info-row">
+                <span class="info-row-label">Username</span>
+                <span class="info-row-value">${esc(currentUser.username)}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">2FA Status</span>
+                <span>
+                    ${enabled
+                        ? '<span class="badge badge-success"><span class="badge-dot"></span>Enabled</span>'
+                        : '<span class="badge badge-warning"><span class="badge-dot"></span>Disabled</span>'}
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Active Devices</span>
+                <span class="info-row-value">${currentUser.activeDevices || 0}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Active Sessions</span>
+                <span class="info-row-value">${currentUser.activeSessions || 0}</span>
+            </div>`;
+    }
 
-            try {
-                console.log(' Using setup session token:', setupSessionToken.substring(0, 8) + '...');
+    const SVG = {
+        lock:    `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+        unlock:  `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`,
+        shield:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+        trash:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
+        pencil:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+        phone:   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2"/></svg>`,
+        desktop: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>`,
+        watch:   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="6"/><path d="M9 2h6M9 22h6"/></svg>`,
+        key:     `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>`,
+        copy:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        warn:    `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+        noSess:  `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+    };
 
-                const result = await apiRequest('POST', '/auth/verify-2fa', {
+    function renderSecurityStatus() {
+        const enabled = currentUser.is2FAEnabled;
+        document.getElementById('securityIcon').innerHTML = enabled ? SVG.lock : SVG.unlock;
+        document.getElementById('securityStatus').innerHTML = enabled
+            ? '<span class="badge badge-success" style="font-size:13px; padding:6px 16px;"><span class="badge-dot"></span>Account Secured</span>'
+            : '<span class="badge badge-warning" style="font-size:13px; padding:6px 16px;"><span class="badge-dot"></span>Enable 2FA for Security</span>';
+        document.getElementById('securityActions').innerHTML = enabled
+            ? `<button class="btn btn-danger" onclick="openDisable2FA()">${SVG.unlock} Disable 2FA</button>`
+            : `<button class="btn btn-primary" style="padding:0 24px; height:40px;" onclick="show2FASetup()">${SVG.shield} Enable 2FA</button>`;
+    }
+
+    /* ═══════════════════════════════════════
+       SETUP 2FA
+    ═══════════════════════════════════════ */
+    async function show2FASetup() {
+        openModal('tfaSetupModal');
+        document.getElementById('tfaSetupContent').innerHTML = `
+            <div style="text-align:center; padding:32px 0;">
+                <div class="spinner spinner-accent" style="width:28px;height:28px;margin:0 auto 12px;"></div>
+                <p style="font-size:14px; color:var(--text-muted);">Setting up 2FA...</p>
+            </div>`;
+        try {
+            const result = await apiRequest('POST', '/auth/setup-2fa', {
+                username: currentUser.username,
+                password: currentUserPassword,
+                deviceInfo: detectDevice()
+            });
+            if (result.success) {
+                setupSessionToken = result.sessionToken;
+                renderSetupContent(result);
+            }
+        } catch (err) {
+            closeSetupModal();
+            showToast(err.message, 'error');
+        }
+    }
+
+    function renderSetupContent(result) {
+        document.getElementById('tfaSetupContent').innerHTML = `
+            <div class="qr-container">
+                <img src="${result.totpSetup.qrCodeDataURL}" alt="QR Code" style="width:160px;height:160px;">
+            </div>
+            <div class="manual-key-box">
+                <div class="manual-key-label">Manual entry key</div>
+                <div class="manual-key-code">${result.totpSetup.secret}</div>
+            </div>
+            <button class="btn btn-outline" style="width:100%; margin-bottom:20px; font-size:13px;"
+                onclick="copyText('${result.totpSetup.secret}', this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Key
+            </button>
+            <div class="form-group">
+                <label class="form-label" for="setupDeviceName">Device Name *</label>
+                <input type="text" id="setupDeviceName" class="input-sm" style="width:100%;"
+                    placeholder="e.g. My iPhone, Work Laptop" minlength="3" maxlength="50">
+                <div class="form-help">Minimum 3 characters</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Verification Code</label>
+                <input type="text" id="setupCode" class="input-sm" style="width:100%; text-align:center; font-size:22px; letter-spacing:8px; font-family:'JetBrains Mono',monospace; height:52px;"
+                    maxlength="6" placeholder="000000" inputmode="numeric">
+            </div>
+            <div id="setupError" class="inline-error"></div>
+            <div style="margin-top:20px;">
+                <button id="setupSubmitBtn" class="btn-primary-lg" disabled onclick="submitSetup2FA()">
+                    <span id="setupSubmitText">Enable 2FA</span>
+                </button>
+            </div>`;
+
+        const nameInput = document.getElementById('setupDeviceName');
+        const codeInput = document.getElementById('setupCode');
+        const submit    = document.getElementById('setupSubmitBtn');
+
+        const validate = () => {
+            const ok = nameInput.value.trim().length >= 3 && /^\d{6}$/.test(codeInput.value.trim());
+            submit.disabled = !ok;
+        };
+        nameInput.addEventListener('input', validate);
+        codeInput.addEventListener('input', () => {
+            validate();
+            if (/^\d{6}$/.test(codeInput.value)) submit.click();
+        });
+        setTimeout(() => nameInput.focus(), 50);
+    }
+
+    function closeSetupModal() { closeModal('tfaSetupModal'); setupSessionToken = null; }
+
+    async function submitSetup2FA() {
+        const name = document.getElementById('setupDeviceName').value.trim();
+        const code = document.getElementById('setupCode').value.trim();
+        if (name.length < 3) { showInlineError('setupError', 'Device name must be at least 3 characters'); return; }
+        if (!/^\d{6}$/.test(code)) { showInlineError('setupError', 'Please enter a valid 6-digit code'); return; }
+
+        const btn = document.getElementById('setupSubmitBtn');
+        btn.disabled = true;
+        document.getElementById('setupSubmitText').textContent = 'Processing...';
+        hideInlineError('setupError');
+
+        try {
+            const result = await apiRequest('POST', '/auth/verify-2fa', {
+                username: currentUser.username,
+                password: currentUserPassword,
                 sessionToken: setupSessionToken,
                 totpCode: code,
-                deviceName: deviceName
-                });
+                deviceName: name
+            });
+            if (result.success) {
+                closeSetupModal();
+                if (result.sessionToken) sessionToken = result.sessionToken;
+                showToast(`"${name}" added successfully!`, 'success');
+                await loadCurrentUser();
+                if (document.getElementById('devicesTab').classList.contains('active')) loadDevices();
+            }
+        } catch (err) {
+            showInlineError('setupError', err.message);
+            document.getElementById('setupCode').value = '';
+            document.getElementById('setupCode').focus();
+            btn.disabled = false;
+            document.getElementById('setupSubmitText').textContent = 'Enable 2FA';
+        }
+    }
 
-                if (result.success) {
+    /* ═══════════════════════════════════════
+       DEVICES
+    ═══════════════════════════════════════ */
+    function getDeviceIcon(info) {
+        const d = (info || '').toLowerCase();
+        if (d.includes('iphone') || d.includes('ios') || d.includes('android') || d.includes('ipad') || d.includes('tablet')) return SVG.phone;
+        if (d.includes('watch')) return SVG.watch;
+        if (d.includes('windows') || d.includes('mac') || d.includes('linux') || d.includes('desktop')) return SVG.desktop;
+        return SVG.key;
+    }
+    function detectIfCurrentDevice(info) {
+        const ua = navigator.userAgent, d = (info || '').toLowerCase();
+        if (d.includes('chrome') && ua.includes('Chrome')) return true;
+        if (d.includes('firefox') && ua.includes('Firefox')) return true;
+        if (d.includes('safari') && ua.includes('Safari') && !ua.includes('Chrome')) return true;
+        if (d.includes('edge') && ua.includes('Edge')) return true;
+        return false;
+    }
+    function detectDevice() {
+        const ua = navigator.userAgent.toLowerCase();
+        if (ua.includes('iphone')) return 'iPhone';
+        if (ua.includes('android')) return 'Android Mobile';
+        if (ua.includes('ipad')) return 'iPad';
+        if (ua.includes('chrome') && !ua.includes('edge')) return 'Chrome Browser';
+        if (ua.includes('firefox')) return 'Firefox Browser';
+        if (ua.includes('safari') && !ua.includes('chrome')) return 'Safari Browser';
+        if (ua.includes('edge')) return 'Edge Browser';
+        return 'Web Browser';
+    }
 
-                    closeModal('setup2FAModal');
+    async function loadDevices() {
+        const list = document.getElementById('devicesList');
+        list.innerHTML = `<div style="text-align:center;padding:32px;"><div class="spinner spinner-accent" style="margin:0 auto;"></div></div>`;
+        try {
+            const r = await apiRequest('POST', '/devices/list', { username: currentUser.username, password: currentUserPassword });
+            renderDevices(r.devices || [], r.twoFactorStatus || 'unknown');
+        } catch (err) {
+            renderDevices([], err.message.includes('User not found') ? 'never_activated' : 'error');
+        }
+    }
 
-                    resetSetupModal();
+    function renderDevices(devices, status) {
+        const list = document.getElementById('devicesList');
+        if (!devices.length) {
+            const msgs = {
+                disabled:         { icon: SVG.unlock, text: '2FA has been disabled. No active authentication devices.', btn: false },
+                never_activated:  { icon: SVG.noSess, text: '2FA has never been activated for this account.', btn: false },
+                enabled:          { icon: SVG.phone,  text: 'No devices configured yet. Add your first device to secure your account.', btn: true },
+                enabled_no_devices:{ icon: SVG.phone, text: 'No devices configured yet.', btn: true },
+                error:            { icon: SVG.warn,   text: 'Unable to load devices. Please try again.', btn: false }
+            };
+            const m = msgs[status] || { icon: SVG.key, text: `No devices (${status})`, btn: false };
+            list.innerHTML = `
+                <div class="devices-empty">
+                    <div class="devices-empty-icon">${m.icon}</div>
+                    <div class="devices-empty-text">${m.text}</div>
+                    ${m.btn ? `<button class="btn btn-primary" onclick="addNewDevice()">${SVG.shield} Enable 2FA</button>` : ''}
+                </div>`;
+            return;
+        }
+        list.innerHTML = devices.map(d => {
+            const isCurrent = detectIfCurrentDevice(d.deviceInfo);
+            return `
+                <div class="device-item ${isCurrent ? 'current' : ''} fade-in">
+                    <div class="device-item-left">
+                        <div class="device-icon">${getDeviceIcon(d.deviceInfo)}</div>
+                        <div class="device-info">
+                            <div class="device-name-row">
+                                <span id="deviceName-${d.deviceId}" class="device-name">${esc(d.deviceInfo)}</span>
+                                ${isCurrent ? '<span class="device-current-badge">Current</span>' : ''}
+                                <button class="device-edit-btn" title="Rename" onclick="editDeviceName(${d.deviceId}, '${esc(d.deviceInfo).replace(/'/g,"\\'")}')">
+                                    ${SVG.pencil}
+                                </button>
+                            </div>
+                            <div class="device-meta">${esc(d.authMethod)} • Active</div>
+                        </div>
+                    </div>
+                    <div class="device-actions">
+                        <button class="btn btn-danger" style="height:32px; font-size:12px; padding:0 12px;"
+                            onclick="removeDevice(${d.deviceId}, '${esc(d.deviceInfo).replace(/'/g,"\\'")}')">
+                            ${SVG.trash} Remove
+                        </button>
+                    </div>
+                </div>`;
+        }).join('');
+    }
 
-                    // Update global session token
-                    if (result.sessionToken) {
-                        
-                        sessionToken = result.sessionToken;
-                        console.log('🔧 Global session token updated:', sessionToken.substring(0, 8) + '...');
-                    }
+    function addNewDevice() { show2FASetup(); }
 
-                currentSetupData = null;
-                setupSessionToken = null;
-                
-                if (result.dbPassword) {
-                    showDBPassword(result.dbPassword);
-                }
+    async function removeDevice(deviceId, deviceName) {
+        let isLastDevice = false;
+        try {
+            const r = await apiRequest('POST', '/devices/list', { username: currentUser.username, password: currentUserPassword });
+            isLastDevice = r.devices && r.devices.length === 1;
+        } catch (e) {}
+        pendingRemove = { deviceId, deviceName, isLastDevice };
+        document.getElementById('removeDeviceUsername').textContent = currentUser.username;
+        document.getElementById('removeDeviceName').textContent = deviceName;
+        document.getElementById('removeDevicePassword').value = '';
+        document.getElementById('removeDeviceBtnText').textContent = isLastDevice ? 'Remove & Disable 2FA' : 'Remove';
+        hideInlineError('removeDeviceError');
+        document.getElementById('removeDeviceWarning').innerHTML = isLastDevice ? `
+            <div class="warning-box">
+                <div class="warning-box-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                <div>
+                    <div class="warning-box-title">Last Device Warning</div>
+                    <div class="warning-box-text">This is your last device. Removing it will completely disable 2FA for your account.</div>
+                </div>
+            </div>` : '';
+        openModal('removeDeviceModal');
+        setTimeout(() => document.getElementById('removeDevicePassword').focus(), 100);
+    }
 
-                // showSuccess('2FA Enabled', '2FA has been successfully enabled for your account!');
-                showSuccess('2FA Enabled', `Device "${deviceName}" has been successfully added to your account!`);
-
+    async function submitRemoveDevice() {
+        if (!pendingRemove) return;
+        const pwd = document.getElementById('removeDevicePassword').value.trim();
+        if (!pwd) { showInlineError('removeDeviceError', 'Password is required'); return; }
+        const btn = document.getElementById('removeDeviceBtn');
+        btn.disabled = true;
+        document.getElementById('removeDeviceBtnText').textContent = 'Removing...';
+        hideInlineError('removeDeviceError');
+        try {
+            const result = await apiRequest('POST', '/devices/remove', {
+                username: currentUser.username,
+                password: pwd,
+                deviceId: pendingRemove.deviceId,
+                confirmDelete: pendingRemove.isLastDevice
+            });
+            if (result.success) {
+                closeModal('removeDeviceModal');
+                currentUserPassword = result.originalPassword || result.currentPassword || pwd;
+                showToast(pendingRemove.isLastDevice ? '2FA disabled — last device removed.' : `"${pendingRemove.deviceName}" removed.`, 'success');
+                pendingRemove = null;
                 await loadCurrentUser();
                 loadDevices();
-                }
-            } catch (error) {
-                showError('setupError', error.message);
-                document.getElementById('setupCode').value = '';
-                document.getElementById('setupCode').focus();
-            } finally {
-                setLoadingState('setupBtn', false);
             }
+        } catch (err) {
+            showInlineError('removeDeviceError', err.message);
+        } finally {
+            btn.disabled = false;
+            document.getElementById('removeDeviceBtnText').textContent = pendingRemove?.isLastDevice ? 'Remove & Disable 2FA' : 'Remove';
         }
+    }
 
-        function showDashboard(data) {
-            document.getElementById('loginContainer').classList.add('hidden');
-            document.getElementById('dashboardLayout').classList.remove('hidden');
+    async function editDeviceName(deviceId, currentName) {
+        const nameEl = document.getElementById(`deviceName-${deviceId}`);
+        if (!nameEl) return;
+        const input = document.createElement('input');
+        input.className = 'input-sm';
+        input.style.cssText = 'width:180px; display:inline-block;';
+        input.value = currentName;
+        nameEl.replaceWith(input);
+        input.focus(); input.select();
 
-            currentUser = data.user || currentUser;
-            document.getElementById('userDisplay').textContent = currentUser.username;
+        const save = async () => {
+            input.removeEventListener('blur', save);
+            input.removeEventListener('keydown', key);
+            const newName = input.value.trim();
+            if (newName && newName !== currentName && newName.length >= 3) {
+                try {
+                    await apiRequest('POST', '/devices/rename', {
+                        username: currentUser.username, password: currentUserPassword,
+                        deviceId, newDeviceName: newName
+                    });
+                    showToast(`Renamed to "${newName}"`, 'success');
+                    loadDevices(); return;
+                } catch (err) { showToast(err.message, 'error'); }
+            }
+            restore();
+        };
+        const restore = () => {
+            input.removeEventListener('blur', save);
+            input.removeEventListener('keydown', key);
+            const span = document.createElement('span');
+            span.id = `deviceName-${deviceId}`;
+            span.className = 'device-name';
+            span.textContent = currentName;
+            input.replaceWith(span);
+        };
+        const key = (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } else if (e.key === 'Escape') { restore(); } };
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', key);
+    }
 
-            loadCurrentUser();
-            showTab('overview');
-        }
+    /* ═══════════════════════════════════════
+       DISABLE 2FA
+    ═══════════════════════════════════════ */
+    function openDisable2FA() {
+        document.getElementById('disable2FAUsername').textContent = currentUser.username;
+        document.getElementById('disable2FAPassword').value = '';
+        hideInlineError('disable2FAError');
+        openModal('disable2FAModal');
+        setTimeout(() => document.getElementById('disable2FAPassword').focus(), 100);
+    }
 
-        function showVerify2FA() {
-            document.getElementById('verifyCode').value = '';
-            hideError('verifyError');
-            showModal('verify2FAModal');
-            document.getElementById('verifyCode').focus();
-        }
-
-        function showTab(tabName) {
-            // Update tabs
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                const isActive = btn.getAttribute('data-tab') === tabName;
-                btn.classList.toggle('border-primary', isActive);
-                btn.classList.toggle('text-primary', isActive);
-                btn.classList.toggle('border-transparent', !isActive);
-                btn.classList.toggle('text-gray-500', !isActive);
+    async function submitDisable2FA() {
+        const pwd = document.getElementById('disable2FAPassword').value.trim();
+        if (!pwd) { showInlineError('disable2FAError', 'Password is required'); return; }
+        const btn = document.getElementById('disable2FABtn');
+        btn.disabled = true;
+        document.getElementById('disable2FABtnText').textContent = 'Disabling...';
+        hideInlineError('disable2FAError');
+        try {
+            const result = await apiRequest('POST', '/auth/disable-2fa', {
+                username: currentUser.username,
+                password: pwd
             });
-
-            // Hide all content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-
-            // Show active tab
-            document.getElementById(tabName + 'Tab').classList.remove('hidden');
-
-            // Load dynamic content
-            if (tabName === 'devices') loadDevices();
-            else if (tabName === 'sessions') loadSessions();
-        }
-
-        
-        // Data loading
-        async function loadCurrentUser() {
-            try {
-                const result = await apiRequest('POST', '/auth/status', {
-                    username: currentUser.username
-                });
-
-                if (result.success) {
-                    currentUser = { ...currentUser, ...result };
-                    updateUserInfo();
-                    updateSecurityStatus();
-                }
-            } catch (error) {
-                console.error('Error loading user:', error); // Keep console error for debugging
-                showErrorModal('Failed to load user information: ' + error.message);
+            if (result.success) {
+                closeModal('disable2FAModal');
+                currentUserPassword = result.originalPassword || pwd;
+                showToast('2FA has been disabled.', 'success');
+                await loadCurrentUser();
+                if (document.getElementById('devicesTab').classList.contains('active')) loadDevices();
             }
+        } catch (err) {
+            showInlineError('disable2FAError', err.message);
+        } finally {
+            btn.disabled = false;
+            document.getElementById('disable2FABtnText').textContent = 'Disable 2FA';
         }
+    }
 
-        function updateUserInfo() {
-            const userInfo = document.getElementById('userInfo');
-            userInfo.innerHTML = `
-                <div class="flex justify-between py-2 border-b">
-                    <span class="font-medium">Username:</span>
-                    <span class="utf8-support">${currentUser.username}</span>
-                </div>
-                <div class="flex justify-between py-2 border-b">
-                    <span class="font-medium">2FA Status:</span>
-                    <span class="${currentUser.is2FAEnabled ? 'text-green-600' : 'text-red-600'}">${currentUser.is2FAEnabled ? 'Enabled' : 'Disabled'}</span>
-                </div>
-                <div class="flex justify-between py-2 border-b">
-                    <span class="font-medium">Active Devices:</span>
-                    <span>${currentUser.activeDevices || 0}</span>
-                </div>
-                <div class="flex justify-between py-2 border-b">
-                    <span class="font-medium">Active Sessions:</span>
-                    <span>${currentUser.activeSessions || 0}</span>
-                </div>
-                <div class="flex justify-between py-2">
-                    <span class="font-medium">DB Password:</span>
-                    <span class="${currentUser.hasDBPassword ? 'text-green-600' : 'text-gray-500'}">${currentUser.hasDBPassword ? 'Generated' : 'Not Set'}</span>
-                </div>
-            `;
+    /* ═══════════════════════════════════════
+       SESSIONS
+    ═══════════════════════════════════════ */
+    async function loadSessions() {
+        const list = document.getElementById('sessionsList');
+        list.innerHTML = `<div style="text-align:center;padding:32px;"><div class="spinner spinner-accent" style="margin:0 auto;"></div></div>`;
+        try {
+            const r = await apiRequest('POST', '/sessions/list', { username: currentUser.username });
+            renderSessions(r.sessions || []);
+        } catch (err) {
+            list.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:24px;">Failed to load sessions.</p>`;
         }
+    }
 
-        function updateSecurityStatus() {
-            const setupBtn = document.getElementById('setup2FABtn');
-            const securityIcon = document.getElementById('securityIcon');
-            const securityStatus = document.getElementById('securityStatus');
-
-            if (currentUser.is2FAEnabled) {
-                setupBtn.classList.add('hidden');
-                securityIcon.textContent = '🔒';
-                securityStatus.textContent = 'Account Secured';
-                securityStatus.className = 'text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block';
-            } else {
-                setupBtn.classList.remove('hidden');
-                securityIcon.textContent = '⚠️';
-                securityStatus.textContent = 'Enable 2FA for Security';
-                securityStatus.className = 'text-sm font-medium text-yellow-600 bg-yellow-100 px-3 py-1 rounded-full inline-block';
-            }
+    function renderSessions(sessions) {
+        const list = document.getElementById('sessionsList');
+        const valid = sessions.filter(s => s.authenticated2FA === true);
+        if (!valid.length) {
+            list.innerHTML = `
+                <div class="devices-empty">
+                    <div class="devices-empty-icon">${SVG.noSess}</div>
+                    <div class="devices-empty-text">No authenticated 2FA sessions found.</div>
+                </div>`;
+            return;
         }
-
-        // Device management with UTF-8 support
-        function getDeviceIcon(deviceInfo) {
-            const info = deviceInfo.toLowerCase();
-
-            if (info.includes('iphone') || info.includes('ios')) return '📱';
-            if (info.includes('android')) return '🤖';
-            if (info.includes('windows')) return '💻';
-            if (info.includes('mac') || info.includes('macos')) return '🖥️';
-            if (info.includes('linux')) return '🐧';
-            if (info.includes('tablet') || info.includes('ipad')) return '📱';
-            if (info.includes('chrome')) return '🌐';
-            if (info.includes('firefox')) return '🦊';
-            if (info.includes('safari')) return '🧭';
-            if (info.includes('edge')) return '🔷';
-
-            return '📟';
-        }
-
-        function detectIfCurrentDevice(deviceInfo) {
-            const currentUA = navigator.userAgent;
-            const deviceInfoLower = deviceInfo.toLowerCase();
-
-            if (deviceInfoLower.includes('chrome') && currentUA.includes('Chrome')) return true;
-            if (deviceInfoLower.includes('firefox') && currentUA.includes('Firefox')) return true;
-            if (deviceInfoLower.includes('safari') && currentUA.includes('Safari') && !currentUA.includes('Chrome')) return true;
-
-            return false;
-        }
-
-
-        // displayDevices 
-        function displayDevices(devices, twoFactorStatus = 'unknown') {
-            const devicesList = document.getElementById('devicesList');
-
-            if (!devices || devices.length === 0) {
-
-                let emptyMessage = '';
-                let emptyIcon = '';
-                let emptyClass = '';
-                let showAddButton = false;
-
-                switch (twoFactorStatus) {
-                    case 'disabled':
-                        emptyIcon = '🔓';
-                        emptyMessage = '2FA has been disabled. No authentication devices are active.';
-                        emptyClass = 'text-orange-600';
-                        break;
-
-                    case 'never_activated':
-                        emptyIcon = '🔐';
-                        emptyMessage = '2FA has never been activated for this account.';
-                        emptyClass = 'text-gray-500';
-                        showAddButton = false;
-                        break;
-
-                    case 'enabled':
-                    case 'enabled_no_devices':
-                        emptyIcon = '📱';
-                        emptyMessage = 'No devices configured yet. Add your first authentication device to secure your account.';
-                        emptyClass = 'text-blue-600';
-                        showAddButton = true;
-                        break;
-
-                    case 'error':
-                        emptyIcon = '❌';
-                        emptyMessage = 'Unable to load devices. Please try again.';
-                        emptyClass = 'text-red-500';
-                        break;
-
-                    default:
-                        emptyIcon = '❓';
-                        emptyMessage = `No devices configured (Status: ${twoFactorStatus})`;
-                        emptyClass = 'text-gray-500';
-                }
-
-                const html = `
-            <div class="text-center py-12">
-                <div class="text-4xl mb-4">${emptyIcon}</div>
-                <p class="${emptyClass} font-medium mb-2">${emptyMessage}</p>
-                <p class="text-xs text-gray-400 mt-2">Debug: Status = ${twoFactorStatus}</p>
-                ${showAddButton ? `
-                    <button onclick="addNewDevice()" 
-                        class="mt-4 bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-md text-sm font-medium transition-colors">
-                        <i class="fas fa-plus mr-2"></i>Add Your First Device
-                    </button>
-                ` : ''}
-            </div>
-        `;
-
-                devicesList.innerHTML = html;
-
-                return;
-            }
-
-
-
-            devicesList.innerHTML = devices.map(device => {
-                const deviceIcon = getDeviceIcon(device.deviceInfo);
-                const isCurrentDevice = detectIfCurrentDevice(device.deviceInfo);
-
-                return `
-            <div class="flex items-center justify-between p-4 border rounded-lg mb-3 ${isCurrentDevice ? 'border-primary bg-primary/5' : ''} group transition-all hover:shadow-md">
-                <div class="flex items-center space-x-3 flex-1">
-                    <div class="text-2xl">${deviceIcon}</div>
-                    <div class="flex-1">
-                        <div class="font-medium flex items-center">
-                            <span id="deviceName-${device.deviceId}" class="device-name utf8-support">${device.deviceInfo}</span>
-                            ${isCurrentDevice ? '<span class="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Current</span>' : ''}
-                            <button onclick="editDeviceName(${device.deviceId}, '${device.deviceInfo.replace(/'/g, '\\\'')}')" 
-                                class="ml-2 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i class="fas fa-edit text-sm"></i>
-                            </button>
+        list.innerHTML = valid.map(s => {
+            const isCurrent = sessionToken === s.sessionToken;
+            return `
+                <div class="session-item ${isCurrent ? 'current' : ''} fade-in">
+                    <div class="session-icon">${getDeviceIcon(s.deviceInfo)}</div>
+                    <div class="session-info">
+                        <div class="session-name-row">
+                            <span class="session-name">${esc(s.deviceInfo || 'Unknown Device')}</span>
+                            ${isCurrent ? '<span class="device-current-badge">Current</span>' : ''}
+                            <span class="session-verified"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 2FA Verified</span>
                         </div>
-                        <div class="text-sm text-gray-500">
-                            ${device.authMethod} • Active
+                        <div class="session-meta">
+                            <span>Started: ${s.loginTime ? new Date(s.loginTime).toLocaleString() : '—'}</span>
+                            <span>Last active: ${s.lastUsed ? new Date(s.lastUsed).toLocaleString() : '—'}</span>
                         </div>
                     </div>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="removeDevice(${device.deviceId}, '${device.deviceInfo.replace(/'/g, '\\\'')}')" 
-                        class="text-red-600 hover:text-red-800 p-2"
-                        title="Remove device">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-            }).join('');
-        }
+                </div>`;
+        }).join('');
+    }
 
-
-
-        // Load Devices
-        async function loadDevices() {
-
-            try {
-                const url = `/devices/list/${currentUser.username}`;
-
-                const response = await apiRequest('GET', url);
-
-                const devices = response.devices || [];
-                const twoFactorStatus = response.twoFactorStatus || 'unknown';
-                const debugInfo = response.debugInfo || 'No debug info';
-
-                displayDevices(devices, twoFactorStatus);
-
-            } catch (error) {
-                console.error('Error loadDevices():', error);
-                console.log('error message:', error.message);
-
-
-                if (error.message.includes('User not found')) {
-                    displayDevices([], 'never_activated');
-                } else if (error.message.includes('Invalid credentials')) {
-                    displayDevices([], 'error');
-                } else {
-                    showErrorModal('Failed to load devices: ' + error.message);
-                    displayDevices([], 'error');
-                }
-            }
-
-        }
-
-
-        // confirm Remove Last Device 
-        async function confirmRemoveLastDevice() {
-            if (!pendingDeviceRemoval) return;
-
-            try {
-                showLoadingModal('Removing last device and disabling 2FA...');
-
-                const result = await apiRequest('DELETE', `/devices/remove/${pendingDeviceRemoval.deviceId}`, {
-                    username: currentUser.username,
-                    password: currentUserPassword,
-                    confirmDelete: true
-                });
-
-                if (result.success) {
-                    closeModal('lastDeviceModal');
-                    hideLoadingModal();
-
-                    // Hide DB password display
-                    document.getElementById('dbPasswordDisplay').classList.add('hidden');
-
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-
-                    // Reload user status first
-                    await loadCurrentUser();
-
-
-                    setTimeout(async () => {
-                        await loadDevices();
-                        await loadSessions();
-                    }, 500);
-
-                    // Show success message
-                    showSuccess('2FA Disabled', result.message || 'Your last device has been removed and 2FA has been disabled.');
-                }
-            } catch (error) {
-                hideLoadingModal();
-                showErrorModal(error.message);
-            } finally {
-                pendingDeviceRemoval = null;
-            }
-        }
-
-        async function editDeviceName(deviceId, currentName) {
-            const nameElement = document.getElementById(`deviceName-${deviceId}`);
-            if (!nameElement) return; // Ensure element exists
-
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentName;
-            input.className = 'px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary utf8-support';
-            input.style.width = '200px';
-
-            nameElement.replaceWith(input);
-            input.focus();
-            input.select();
-
-            const saveEdit = async () => {
-                const newName = input.value.trim();
-
-                // Clean up event listeners to prevent multiple calls
-                input.removeEventListener('blur', saveEdit);
-                input.removeEventListener('keypress', keypressHandler);
-
-                if (newName && newName !== currentName) {
-                    try {
-                        const result = await apiRequest('PUT', `/devices/rename/${deviceId}`, {
-                            username: currentUser.username,
-                            password: currentUserPassword,
-                            newDeviceName: newName
-                        });
-
-                        if (result.success) {
-                            showSuccess('Device Renamed', `Device renamed to "${newName}"`);
-                            loadDevices();
-                            loadSessions(); // Refresh sessions to show updated device names
-                            return;
-                        }
-                    } catch (error) {
-                        showErrorModal(error.message);
-                    }
-                }
-
-                // Restore original name if API call failed or name didn't change
-                restoreOriginalName();
-            };
-
-            const restoreOriginalName = () => {
-                // Clean up event listeners before restoring
-                input.removeEventListener('blur', saveEdit);
-                input.removeEventListener('keypress', keypressHandler);
-
-                const span = document.createElement('span');
-                span.id = `deviceName-${deviceId}`;
-                span.className = 'device-name utf8-support';
-                span.textContent = currentName;
-                input.replaceWith(span);
-            };
-
-            const keypressHandler = (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveEdit();
-                } else if (e.key === 'Escape') {
-                    restoreOriginalName();
-                }
-            };
-
-            input.addEventListener('blur', saveEdit);
-            input.addEventListener('keypress', keypressHandler);
-        }
-
-        // Enhanced device removal with modern confirmation
-        async function removeDevice(deviceId, deviceName) {
-            try {
-                // First attempt to remove device (no password required yet)
-                const result = await apiRequest('DELETE', `/devices/remove/${deviceId}`, {
-                    username: currentUser.username,
-                    password: currentUserPassword,
-                    confirmDelete: false
-                });
-
-                if (result.success) {
-                    showSuccess('Device Removed', `"${deviceName}" has been removed successfully.`);
-                    loadDevices();
-                    await loadCurrentUser();
-                }
-            } catch (error) {
-                // Check if this requires confirmation for last device
-                if (error.message.includes('This is your last device')) {
-                    // Show modern confirmation modal
-                    pendingDeviceRemoval = { deviceId, deviceName };
-                    document.getElementById('lastDeviceName').textContent = deviceName;
-                    showModal('lastDeviceModal');
-                } else {
-                    showErrorModal(error.message);
-                }
-            }
-        }
-
-        async function addNewDevice() {
-            // Request password before setting up 2FA, as setup-2fa API requires it.
-            try {
-                await requestPassword('Enter your password to add a new 2FA device.');
-                await show2FASetup();
-            } catch (error) {
-
-                console.error("Add new device cancelled or failed:", error);
-            }
-        }
-
-        // Reset setup modal function
-        function resetSetupModal() {
-            const deviceNameInput = document.getElementById('deviceName');
-            const setupCodeInput = document.getElementById('setupCode');
-            const setupBtn = document.getElementById('setupBtn');
-            
-            if (deviceNameInput) deviceNameInput.value = '';
-            if (setupCodeInput) setupCodeInput.value = '';
-            
-            if (setupBtn) {
-                setupBtn.disabled = true;
-                setupBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                setupBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
-            }
-            
-            hideError('setupError');
-        }
-
-
-        // Session management with device info display
-        async function loadSessions() {
-            try {
-                const sessions = await apiRequest('GET', `/sessions/list/${currentUser.username}`);
-                displaySessions(sessions.sessions || []);
-            } catch (error) {
-                console.error('Error loading sessions:', error);
-                showErrorModal('Failed to load sessions: ' + error.message);
-                displaySessions([]);
-            }
-        }
-
-        function displaySessions(sessions) {
-            const sessionsList = document.getElementById('sessionsList');
-
-            const validSessions = sessions.filter(session => session.authenticated2FA === true);
-
-            console.log("validSessions:", validSessions, ' numbers:', validSessions.length);
-
-            if (validSessions.length === 0) {
-                 sessionsList.innerHTML = `
-                    <div class="text-center py-8">
-                        <div class="text-4xl mb-4">🔐</div>
-                        <p class="text-gray-500 font-medium">No authenticated 2FA sessions found</p>
-                        <p class="text-gray-400 text-sm mt-2">Sessions will appear here after successful 2FA verification</p>
-                    </div>
-                `;
-                return;
-            }
-
-            sessionsList.innerHTML = validSessions.map((session, index) => {
-                const deviceIcon = getDeviceIcon(session.deviceInfo || 'Unknown Device');
-                const isCurrentSession = sessionToken && session.sessionToken.startsWith(sessionToken.substring(0, 8));
-
-
-                return `
-                    <div class="p-4 border rounded-lg mb-3 ${index === 0 ? 'border-primary bg-primary/5' : ''}">
-                        <div class="flex justify-between items-start">
-                            <div class="flex items-center space-x-3">
-                                <div class="text-2xl">${deviceIcon}</div>
-                                <div>
-                                    <div class="font-medium flex items-center">
-                                        <span class="utf8-support">${session.deviceInfo || 'Unknown Device'}</span>
-                                        ${sessionToken === session.sessionToken ? '<span class="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Current</span>' : ''}
-                                    </div>
-                                    <div class="text-sm text-gray-500 mt-1">
-                                        <div>Device: ${session.deviceInfo || 'Unknown Device'}</div>
-                                        <div>Started: ${session.loginTime ? new Date(session.loginTime).toLocaleString() : 'Unknown'}</div>
-                                        <div>Last activity: ${session.lastUsed ? new Date(session.lastUsed).toLocaleString() : 'Unknown'}</div>
-                                        <div class="flex items-center">
-                                            <span class="text-green-600">✅ 2FA Verified</span>
-                                            ${session.deviceStatus ? `<span class="ml-2 text-xs text-gray-400">(${session.deviceStatus})</span>` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function logoutAllSessions() {
-            // Re-authenticate password for sensitive action
-            try {
-                await requestPassword('Enter your password to log out all other sessions.');
-            } catch (error) {
-                console.error("Logout all sessions cancelled or failed:", error);
-                return; // Stop if password not provided or request cancelled
-            }
-
-            if (!confirm('This will log you out of all other sessions. Continue?')) return;
-
-            try {
-                showLoadingModal('Logging out other sessions...');
-                const result = await apiRequest('POST', '/sessions/logout-all', {
-                    username: currentUser.username,
-                    password: currentUserPassword
-                });
-
-                if (result.success) {
-                    hideLoadingModal();
-                    showSuccess('Sessions Terminated', 'All other sessions have been terminated.');
-                    loadSessions();
-                    loadCurrentUser();
-                }
-            } catch (error) {
-                hideLoadingModal();
-                showErrorModal(error.message);
-            }
-        }
-
-        // Utility functions
-        function showDBPassword(password) {
-            // show the password in the display area
-            // document.getElementById('dbPasswordValue').textContent = password;
-            // document.getElementById('dbPasswordDisplay').classList.remove('hidden');
-                console.log('DB Password generation skipped');
-        }
-
-        function copyDBPassword() {
-            const password = document.getElementById('dbPasswordValue').textContent;
-            if (!navigator.clipboard) {
-                showErrorModal('Clipboard API not supported in your browser.');
-                return;
-            }
-            navigator.clipboard.writeText(password).then(() => {
-                showSuccess('Copied', 'Database password copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy text: ', err);
-                showErrorModal('Failed to copy password to clipboard. Please copy manually.');
+    async function logoutAllSessions() {
+        if (!confirm('This will terminate all other sessions. Continue?')) return;
+        showLoading('Logging out other sessions...');
+        try {
+            const r = await apiRequest('POST', '/sessions/logout-all', {
+                username: currentUser.username,
+                password: currentUserPassword
             });
-        }
-
-        function copyManualKey() {
-            const key = document.getElementById('manualKey').textContent;
-            if (!navigator.clipboard) {
-                showErrorModal('Clipboard API not supported in your browser.');
-                return;
+            if (r.success) {
+                showToast('All other sessions terminated.', 'success');
+                loadSessions(); loadCurrentUser();
             }
-            navigator.clipboard.writeText(key).then(() => {
-                showSuccess('Copied', 'Manual entry key copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy text: ', err);
-                showErrorModal('Failed to copy key to clipboard. Please copy manually.');
-            });
-        }
+        } catch (err) { showToast(err.message, 'error'); }
+        finally { hideLoading(); }
+    }
 
-        function showModal(modalId) {
-            document.getElementById(modalId).classList.remove('hidden');
-        }
+    /* ═══════════════════════════════════════
+       LOGOUT
+    ═══════════════════════════════════════ */
+    async function logout() {
+        try { if (sessionToken) await apiRequest('POST', '/sessions/logout', { username: currentUser?.username, sessionToken }); } catch (e) {}
+        currentUser = null; sessionToken = null; currentUserPassword = null; setupSessionToken = null;
+        document.getElementById('loginForm').reset();
+        document.getElementById('loginBtn').disabled = true;
+        document.getElementById('dashboardLayout').classList.remove('visible');
+        document.getElementById('loginContainer').style.display = '';
+        hideBanner('loginErrorBanner');
+    }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.add('hidden');
-        }
+    /* ═══════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════ */
+    function esc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
-        function showSuccess(title, message) {
-            document.getElementById('successTitle').textContent = title;
-            document.getElementById('successMessage').textContent = message;
-            showModal('successModal');
-        }
+    function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) {
+        document.getElementById(id).classList.add('hidden');
+        if (id === 'verify2FAModal' && _totpTimer) { clearInterval(_totpTimer); _totpTimer = null; }
+    }
 
-        function showLoadingModal(text = 'Processing...') {
-            document.getElementById('loadingText').textContent = text;
-            showModal('loadingModal');
-        }
+    function showLoading(text = 'Processing...') {
+        document.getElementById('loadingText').textContent = text;
+        document.getElementById('loadingOverlay').classList.add('visible');
+    }
+    function hideLoading() { document.getElementById('loadingOverlay').classList.remove('visible'); }
 
-        function hideLoadingModal() {
-            closeModal('loadingModal');
-        }
+    let toastTimer;
+    function showToast(message, type = 'info') {
+        const el = document.getElementById('toast');
+        el.textContent = message;
+        el.className = type;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+    }
 
-        function showError(elementId, message) {
-            if (elementId) {
-                const errorEl = document.getElementById(elementId);
-                errorEl.textContent = message;
-                errorEl.classList.remove('hidden');
-                errorEl.classList.add('error-shake');
-                setTimeout(() => {
-                    errorEl.classList.add('hidden');
-                    errorEl.classList.remove('error-shake');
-                }, 5000);
-            }
-        }
+    function showInlineError(id, msg) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = msg;
+        el.classList.add('visible');
+    }
+    function hideInlineError(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('visible');
+    }
 
-        function hideError(elementId) {
-            const errorEl = document.getElementById(elementId);
-            errorEl.classList.add('hidden');
-            errorEl.classList.remove('error-shake');
-        }
+    function showBanner(bannerId, textId, msg) {
+        document.getElementById(textId).textContent = msg;
+        document.getElementById(bannerId).classList.add('visible');
+    }
+    function hideBanner(bannerId) {
+        document.getElementById(bannerId).classList.remove('visible');
+    }
 
-        function setLoadingState(btnId, loading) {
-            const btn = document.getElementById(btnId);
-            const spinner = document.getElementById(btnId.replace('Btn', 'Spinner'));
-            const text = document.getElementById(btnId.replace('Btn', 'BtnText'));
+    async function copyText(text, btn) {
+        try {
+            await navigator.clipboard.writeText(text);
+            const orig = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => btn.textContent = orig, 1500);
+        } catch (e) { showToast('Failed to copy', 'error'); }
+    }
 
-            if (!btn) return;
-
-            if (loading) {
-                btn.disabled = true;
-                spinner?.classList.remove('hidden');
-                if (text) text.textContent = 'Loading...';
-            } else {
-                btn.disabled = false;
-                spinner?.classList.add('hidden');
-                if (text) {
-                    if (btnId === 'loginBtn') text.textContent = 'Sign In';
-                    else if (btnId === 'setupBtn') text.textContent = 'Enable 2FA';
-                    else if (btnId === 'verifyBtn') text.textContent = 'Verify';
-                }
-            }
-        }
-
-        async function logout() {
-            try {
-                if (sessionToken) {
-                    await apiRequest('POST', '/sessions/logout', { sessionToken });
-                }
-
-                currentUser = null;
-                sessionToken = null;
-                currentUserPassword = null; 
-                setupSessionToken = null;
-
-                document.getElementById('loginForm').reset();
-                document.getElementById('privacyConsent').checked = false;
-                // Re-disable login button if privacy consent is not checked.
-                const loginBtn = document.getElementById('loginBtn');
-                loginBtn.disabled = true;
-                loginBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                loginBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
-
-                document.getElementById('dbPasswordDisplay').classList.add('hidden');
-
-                document.getElementById('dashboardLayout').classList.add('hidden');
-                document.getElementById('loginContainer').classList.remove('hidden');
-            } catch (error) {
-                console.error('Logout error:', error);
-                showErrorModal('Failed to log out: ' + error.message);
-            }
-        }
-
-        // Global function exports
-        window.showTab = showTab;
-        window.logout = logout;
-        window.show2FASetup = show2FASetup;
-        window.removeDevice = removeDevice;
-        window.confirmRemoveLastDevice = confirmRemoveLastDevice;
-        window.editDeviceName = editDeviceName;
-        window.addNewDevice = addNewDevice;
-        window.logoutAllSessions = logoutAllSessions;
-        window.copyDBPassword = copyDBPassword;
-        window.copyManualKey = copyManualKey;
-        window.closeModal = closeModal;
-    </script>
-
+    // Global exports
+    window.showTab = showTab;
+    window.logout  = logout;
+    window.show2FASetup    = show2FASetup;
+    window.addNewDevice    = addNewDevice;
+    window.removeDevice    = removeDevice;
+    window.submitRemoveDevice = submitRemoveDevice;
+    window.editDeviceName  = editDeviceName;
+    window.openDisable2FA  = openDisable2FA;
+    window.submitDisable2FA = submitDisable2FA;
+    window.submitVerify2FA = submitVerify2FA;
+    window.logoutAllSessions = logoutAllSessions;
+    window.closeModal      = closeModal;
+    window.closeSetupModal = closeSetupModal;
+    window.copyText        = copyText;
+</script>
 </body>
-
 </html>
