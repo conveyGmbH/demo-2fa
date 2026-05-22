@@ -56,6 +56,14 @@ const config = {
         callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/v1/auth/google/callback'
     },
 
+    // Salesforce OAuth configuration
+    salesforce: {
+        clientId:     process.env.SF_CLIENT_ID,
+        clientSecret: process.env.SF_CLIENT_SECRET,
+        callbackURL:  process.env.SF_CALLBACK_URL || 'http://localhost:4000/api/v1/auth/salesforce/callback',
+        loginUrl:     process.env.SF_LOGIN_URL    || 'https://login.salesforce.com',
+    },
+
     // Logging configuration
     logging: {
         level: process.env.LOG_LEVEL || 'info',
